@@ -150,6 +150,8 @@ pub mod pallet {
 		MaxCardanoAddrLengthExceeded,
 		MaxRegistrationsExceeded,
 		LedgerApiError(LedgerApiError),
+		/// Only one inherent is allowed per block
+		InherentAlreadyExecuted,
 	}
 
 	impl<T: Config> From<LedgerApiError> for Error<T> {
@@ -212,6 +214,9 @@ pub mod pallet {
 	/// Max amount of Cardano transactions that can be processed per block
 	pub type CardanoTxCapacityPerBlock<T: Config> =
 		StorageValue<_, u32, ValueQuery, DefaultCardanoTxCapacityPerBlock>;
+
+	#[pallet::storage]
+	pub type InherentExecutedThisBlock<T: Config> = StorageValue<_, bool, ValueQuery>;
 
 	#[pallet::genesis_config]
 	#[derive(frame_support::DefaultNoBound)]
@@ -447,8 +452,6 @@ pub mod pallet {
 					.concat(),
 			);
 
-			UtxoOwners::<T>::insert(nonce, dust_public_key.clone());
-
 			let event = LedgerApi::construct_cnight_generates_dust_event(
 				data.value,
 				&dust_public_key.0,
@@ -458,7 +461,10 @@ pub mod pallet {
 			);
 
 			match event {
-				Ok(event_bytes) => Some(CNightGeneratesDustEventSerialized(event_bytes)),
+				Ok(event_bytes) => {
+					UtxoOwners::<T>::insert(nonce, dust_public_key.clone());
+					Some(CNightGeneratesDustEventSerialized(event_bytes))
+				},
 				Err(e) => {
 					log::error!("Fatal: Unable to construct CNightGeneratesDustEvent: {e:?}");
 					None
@@ -475,7 +481,7 @@ pub mod pallet {
 					.concat(),
 			);
 
-			let Some(dust_public_key) = UtxoOwners::<T>::get(nonce) else {
+			let Some(dust_public_key) = UtxoOwners::<T>::take(nonce) else {
 				log::warn!(
 					"No create event for UTXO: {}#{}",
 					hex::encode(data.utxo_tx_hash.0),
@@ -502,6 +508,18 @@ pub mod pallet {
 		}
 	}
 
+	#[pallet::hooks]
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		fn on_initialize(_n: BlockNumberFor<T>) -> Weight {
+			// Pre-account for on_finalize weight (storage write to reset inherent flag)
+			T::DbWeight::get().writes(1)
+		}
+
+		fn on_finalize(_n: BlockNumberFor<T>) {
+			InherentExecutedThisBlock::<T>::kill();
+		}
+	}
+
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		#[pallet::call_index(0)]
@@ -512,6 +530,8 @@ pub mod pallet {
 			next_cardano_position: CardanoPosition,
 		) -> DispatchResult {
 			ensure_none(origin)?;
+			ensure!(!InherentExecutedThisBlock::<T>::get(), Error::<T>::InherentAlreadyExecuted);
+			InherentExecutedThisBlock::<T>::put(true);
 
 			let mut events: Vec<CNightGeneratesDustEventSerialized> = Vec::new();
 
