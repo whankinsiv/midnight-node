@@ -9,6 +9,11 @@ on:
         description: "The branch to build and deploy"
         required: false
         default: ""
+      skip-attestation:
+        description: "Skip SBOM attestation (use when Sigstore/Rekor is down)"
+        required: false
+        type: boolean
+        default: false
 
 # no top level default permissions for security reasons
 permissions: {}
@@ -364,6 +369,7 @@ jobs:
     with:
       image: ghcr.io/midnight-ntwrk/midnight-node:${{ needs.publish-amd64.outputs.IMAGE_TAG }}-amd64
       sbom-artifact-name: sbom-midnight-node-amd64
+      skip-attestation: ${{ inputs.skip-attestation || false }}
     secrets: inherit
 
   sbom-scan-node-arm64:
@@ -377,6 +383,7 @@ jobs:
     with:
       image: ghcr.io/midnight-ntwrk/midnight-node:${{ needs.publish-amd64.outputs.IMAGE_TAG }}-arm64
       sbom-artifact-name: sbom-midnight-node-arm64
+      skip-attestation: ${{ inputs.skip-attestation || false }}
     secrets: inherit
 
   sbom-scan-toolkit-amd64:
@@ -390,6 +397,7 @@ jobs:
     with:
       image: ghcr.io/midnight-ntwrk/midnight-node-toolkit:${{ needs.publish-amd64.outputs.IMAGE_TAG }}-amd64
       sbom-artifact-name: sbom-midnight-node-toolkit-amd64
+      skip-attestation: ${{ inputs.skip-attestation || false }}
     secrets: inherit
 
   sbom-scan-toolkit-arm64:
@@ -403,6 +411,7 @@ jobs:
     with:
       image: ghcr.io/midnight-ntwrk/midnight-node-toolkit:${{ needs.publish-amd64.outputs.IMAGE_TAG }}-arm64
       sbom-artifact-name: sbom-midnight-node-toolkit-arm64
+      skip-attestation: ${{ inputs.skip-attestation || false }}
     secrets: inherit
 
 #  sbom-scan-indexer-images:
@@ -690,6 +699,7 @@ jobs:
       sbom-artifact-name: sbom-midnight-node-midnightntwrk-amd64
       platform: linux/amd64
       multi-arch-image: ghcr.io/midnightntwrk/midnight-node:${{ needs.publish-amd64.outputs.IMAGE_TAG }}
+      skip-attestation: ${{ inputs.skip-attestation || false }}
     secrets: inherit
 
   sbom-scan-midnightntwrk-node-arm64:
@@ -705,6 +715,7 @@ jobs:
       sbom-artifact-name: sbom-midnight-node-midnightntwrk-arm64
       platform: linux/arm64
       multi-arch-image: ghcr.io/midnightntwrk/midnight-node:${{ needs.publish-amd64.outputs.IMAGE_TAG }}
+      skip-attestation: ${{ inputs.skip-attestation || false }}
     secrets: inherit
 
   sbom-scan-midnightntwrk-toolkit-amd64:
@@ -720,6 +731,7 @@ jobs:
       sbom-artifact-name: sbom-midnight-node-toolkit-midnightntwrk-amd64
       platform: linux/amd64
       multi-arch-image: ghcr.io/midnightntwrk/midnight-node-toolkit:${{ needs.publish-amd64.outputs.IMAGE_TAG }}
+      skip-attestation: ${{ inputs.skip-attestation || false }}
     secrets: inherit
 
   sbom-scan-midnightntwrk-toolkit-arm64:
@@ -735,4 +747,5 @@ jobs:
       sbom-artifact-name: sbom-midnight-node-toolkit-midnightntwrk-arm64
       platform: linux/arm64
       multi-arch-image: ghcr.io/midnightntwrk/midnight-node-toolkit:${{ needs.publish-amd64.outputs.IMAGE_TAG }}
+      skip-attestation: ${{ inputs.skip-attestation || false }}
     secrets: inherit
