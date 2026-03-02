@@ -1,5 +1,5 @@
 // This file is part of midnight-node.
-// Copyright (C) 2025 Midnight Foundation
+// Copyright (C) 2025-2026 Midnight Foundation
 // SPDX-License-Identifier: Apache-2.0
 // Licensed under the Apache License, Version 2.0 (the "License");
 // You may not use this file except in compliance with the License.
@@ -95,6 +95,9 @@ impl MidnightNodeClient {
 	pub async fn get_block_one_hash(
 		&self,
 	) -> Result<HashFor<MidnightNodeClientConfig>, ClientError> {
+		if self.get_finalized_height().await? < 1 {
+			return Err(ClientError::OnlyGenesisFinalized);
+		}
 		let hash = self.rpc.chain_get_block_hash(Some(BlockNumber::Number(1))).await?;
 		hash.ok_or_else(|| ClientError::BlockHashNotFound(1))
 	}
@@ -120,4 +123,6 @@ pub enum ClientError {
 	UnsupportedNetworkId(Vec<u8>),
 	#[error("failed to get block hash for block {0}")]
 	BlockHashNotFound(u32),
+	#[error("chain not yet started - only genesis is finalized")]
+	OnlyGenesisFinalized,
 }

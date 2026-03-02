@@ -1,5 +1,5 @@
 // This file is part of midnight-node.
-// Copyright (C) 2025 Midnight Foundation
+// Copyright (C) 2025-2026 Midnight Foundation
 // SPDX-License-Identifier: Apache-2.0
 // Licensed under the Apache License, Version 2.0 (the "License");
 // You may not use this file except in compliance with the License.
@@ -17,7 +17,6 @@ pub mod dust_balance;
 pub mod generate_genesis;
 pub mod generate_sample_intent;
 pub mod generate_txs;
-pub mod get_tx_from_context;
 pub mod random_address;
 pub mod root_call;
 pub mod send_intent;
@@ -30,4 +29,5 @@ pub mod show_viewing_key;
 pub mod show_wallet;
 pub mod update_ledger_parameters;
 
+pub mod fork;
 pub mod generate_intent;

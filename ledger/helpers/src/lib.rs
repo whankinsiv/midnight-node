@@ -1,5 +1,5 @@
 // This file is part of midnight-node.
-// Copyright (C) 2025 Midnight Foundation
+// Copyright (C) 2025-2026 Midnight Foundation
 // SPDX-License-Identifier: Apache-2.0
 // Licensed under the Apache License, Version 2.0 (the "License");
 // You may not use this file except in compliance with the License.
@@ -14,9 +14,12 @@
 mod utils;
 
 pub use utils::find_dependency_version;
+pub mod extract_tx_with_context;
 
 #[path = "versions"]
 pub mod hard_fork_test {
+	#[cfg(feature = "can-panic")]
+	pub use super::extract_tx_with_context::extract_tx_with_context_ledger_hf as extract_tx_with_context;
 	pub use {
 		base_crypto_hf as base_crypto, coin_structure_hf as coin_structure,
 		ledger_storage_hf as ledger_storage, midnight_serialize_hf as midnight_serialize,
@@ -36,6 +39,8 @@ pub mod hard_fork_test {
 
 #[path = "versions"]
 pub mod ledger_7 {
+	#[cfg(feature = "can-panic")]
+	pub use super::extract_tx_with_context::extract_tx_with_context_ledger_7 as extract_tx_with_context;
 	pub use {
 		base_crypto, coin_structure, ledger_storage, midnight_serialize, mn_ledger,
 		onchain_runtime, transient_crypto, zkir, zswap,
@@ -52,10 +57,14 @@ pub mod ledger_7 {
 
 #[path = "versions"]
 pub mod ledger_8 {
+	#[cfg(feature = "can-panic")]
+	pub use super::extract_tx_with_context::extract_tx_with_context_ledger_8 as extract_tx_with_context;
 	pub use {
-		base_crypto, coin_structure, ledger_storage_ledger_8 as ledger_storage, midnight_serialize,
-		mn_ledger_8 as mn_ledger, onchain_runtime_ledger_8 as onchain_runtime, transient_crypto,
-		zkir, zswap_ledger_8 as zswap,
+		base_crypto_ledger_8 as base_crypto, coin_structure_ledger_8 as coin_structure,
+		ledger_storage_ledger_8 as ledger_storage,
+		midnight_serialize_ledger_8 as midnight_serialize, mn_ledger_8 as mn_ledger,
+		onchain_runtime_ledger_8 as onchain_runtime, transient_crypto_ledger_8 as transient_crypto,
+		zkir_ledger_8 as zkir, zswap_ledger_8 as zswap,
 	};
 
 	#[allow(clippy::duplicate_mod)]
@@ -70,7 +79,6 @@ pub mod ledger_8 {
 
 pub use ledger_8 as latest;
 
-#[cfg(feature = "can-panic")]
 pub mod fork;
 
 #[cfg(hardfork_test)]

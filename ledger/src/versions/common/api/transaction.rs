@@ -1,5 +1,5 @@
 // This file is part of midnight-node.
-// Copyright (C) 2025 Midnight Foundation
+// Copyright (C) 2025-2026 Midnight Foundation
 // SPDX-License-Identifier: Apache-2.0
 // Licensed under the Apache License, Version 2.0 (the "License");
 // You may not use this file except in compliance with the License.
@@ -407,7 +407,7 @@ pub enum Operation {
 #[cfg(test)]
 mod tests {
 	use super::super::super::{
-		super::{CRATE_NAME, helpers_local::extract_info_from_tx_with_context},
+		super::{CRATE_NAME, helpers_local::extract_tx_with_context},
 		BlockContext, api,
 	};
 	use super::*;
@@ -434,7 +434,7 @@ mod tests {
 		api: &api::Api,
 		bytes: &[u8],
 	) -> (api::Transaction<Signature, DefaultDB>, BlockContext) {
-		let (tx, block_context) = extract_info_from_tx_with_context(bytes);
+		let (tx, block_context) = extract_tx_with_context(bytes);
 		let tx = api.tagged_deserialize::<Transaction<Signature, DefaultDB>>(&tx);
 		assert!(tx.is_ok(), "Can't deserialize transaction: {}", tx.unwrap_err());
 
