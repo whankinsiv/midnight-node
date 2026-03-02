@@ -17,6 +17,7 @@
 
 pub mod candidates_data_source;
 pub mod cnight_observation;
+pub mod cnight_observation_grpc;
 pub mod cnight_observation_mock;
 pub mod federated_authority_observation;
 pub mod federated_authority_observation_mock;

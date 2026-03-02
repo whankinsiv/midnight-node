@@ -24,7 +24,15 @@ pub use midnight_primitives_cnight_observation::{
 pub mod db;
 
 #[cfg(feature = "std")]
+pub mod grpc;
+
+#[cfg(feature = "std")]
 pub mod data_source;
+
+#[cfg(feature = "std")]
+pub mod midnight_state {
+	tonic::include_proto!("midnight_state");
+}
 
 #[cfg(feature = "std")]
 pub use {
