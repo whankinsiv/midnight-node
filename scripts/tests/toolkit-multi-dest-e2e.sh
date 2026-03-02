@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # This file is part of midnight-node.
-# Copyright (C) 2025 Midnight Foundation
+# Copyright (C) 2025-2026 Midnight Foundation
 # SPDX-License-Identifier: Apache-2.0
 # Licensed under the Apache License, Version 2.0 (the "License");
 # You may not use this file except in compliance with the License.
@@ -175,8 +175,7 @@ for i in $(seq $START_WALLET $END_WALLET); do
         --unshielded-amount 100 \
         --destination-address "$DEST_ADDR_01" \
         -s "$NODE_1" \
-        --dest-file "$(out_path "tx_${i}.mn")" \
-        --to-bytes
+        --dest-file "$(out_path "tx_${i}.mn")"
 done
 
 echo "Generated $(find "$tempdir" -name 'tx_*.mn' 2>/dev/null | wc -l) transaction files"

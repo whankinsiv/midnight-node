@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # This file is part of midnight-node.
-# Copyright (C) 2025 Midnight Foundation
+# Copyright (C) 2025-2026 Midnight Foundation
 # SPDX-License-Identifier: Apache-2.0
 # Licensed under the Apache License, Version 2.0 (the "License");
 # You may not use this file except in compliance with the License.
@@ -109,7 +109,7 @@ docker run --rm -e RUST_BACKTRACE=1 --network container:midnight-node-contracts 
     send-intent \
     --intent-file "/out/$deploy_intent_filename" \
     --compiled-contract-dir contract/managed/counter \
-    --to-bytes --dest-file "/out/$deploy_tx_filename"
+    --dest-file "/out/$deploy_tx_filename"
 
 test -f "$tempdir/$deploy_tx_filename"
 

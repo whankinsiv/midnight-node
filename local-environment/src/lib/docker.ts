@@ -1,5 +1,5 @@
 // This file is part of midnight-node.
-// Copyright (C) 2025 Midnight Foundation
+// Copyright (C) 2025-2026 Midnight Foundation
 // SPDX-License-Identifier: Apache-2.0
 // Licensed under the Apache License, Version 2.0 (the "License");
 // You may not use this file except in compliance with the License.
@@ -53,7 +53,7 @@ export function stopDockerCompose(options: DockerComposeOptions) {
 }
 
 export function runDockerCompose(options: DockerComposeOptions) {
-  const args = ["-f", options.composeFile, "up"];
+  const args = ["-f", options.composeFile, "up", "--build"];
   if (options.detach) {
     args.push("--detach");
   }

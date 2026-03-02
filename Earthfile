@@ -285,7 +285,6 @@ rebuild-genesis-state:
                 --src-file out/genesis_block_${NETWORK}.mn \
                 --dust-warp \
                 --dest-file out/contract_tx_1_deploy_${NETWORK}.mn \
-                --to-bytes \
                 contract-simple deploy \
                 --rng-seed "$RNG_SEED" \
             && /midnight-node-toolkit contract-address \
@@ -296,7 +295,6 @@ rebuild-genesis-state:
                 --src-file out/contract_tx_1_deploy_${NETWORK}.mn \
                 --dust-warp \
                 --dest-file out/contract_tx_2_store_${NETWORK}.mn \
-                --to-bytes \
                 contract-simple call \
                 --call-key store \
                 --rng-seed "$RNG_SEED" \
@@ -307,7 +305,6 @@ rebuild-genesis-state:
                 --src-file out/contract_tx_2_store_${NETWORK}.mn \
                 --dust-warp \
                 --dest-file out/contract_tx_3_check_${NETWORK}.mn \
-                --to-bytes \
                 contract-simple call \
                 --call-key check \
                 --rng-seed "$RNG_SEED" \
@@ -319,7 +316,6 @@ rebuild-genesis-state:
                 --src-file out/contract_tx_3_check_${NETWORK}.mn \
                 --dust-warp \
                 --dest-file out/contract_tx_4_change_authority_${NETWORK}.mn \
-                --to-bytes \
                 contract-simple maintenance \
                 --rng-seed "$RNG_SEED" \
                 --contract-address $(cat out/contract_address_${NETWORK}.mn) \
@@ -336,7 +332,7 @@ rebuild-genesis-state:
                 --src-file out/genesis_block_${NETWORK}.mn \
                 --dust-warp \
                 --dest-file out/zswap_undeployed.mn \
-                --to-bytes batches \
+                batches \
                 -n 1 \
                 -b 1 \
                 --rng-seed "$RNG_SEED" \
@@ -354,18 +350,12 @@ rebuild-genesis-state:
             && /midnight-node-toolkit generate-txs \
                 --src-file out/genesis_block_${NETWORK}.mn \
                 --dust-warp \
-                --dest-file out/serialized_tx_with_context.mn \
-                --to-bytes \
+                --dest-file out/serialized_tx.mn \
                 single-tx \
                 --unshielded-amount 500 \
                 --rng-seed "$RNG_SEED" \
                 --source-seed "0000000000000000000000000000000000000000000000000000000000000001" \
                 --destination-address $(cat out/dest_addr.mn) \
-            && /midnight-node-toolkit get-tx-from-context \
-                --network $NETWORK \
-                --src-file out/serialized_tx_with_context.mn \
-                --dest-file out/serialized_tx_no_context.mn \
-                --from-bytes \
             && cp out/serialized_* /res/test-tx-deserialize \
         ; fi
 
@@ -390,7 +380,6 @@ rebuild-genesis-state:
                 --intent-file /res/test-data/contract/counter/deploy.bin \
                 --compiled-contract-dir /toolkit-js/test/contract/managed/counter \
                 --rng-seed "$RNG_SEED" \
-                --to-bytes \
                 --dest-file /res/test-data/contract/counter/deploy_tx.mn \
             && /midnight-node-toolkit contract-address \
                 --src-file /res/test-data/contract/counter/deploy_tx.mn \
@@ -421,7 +410,6 @@ rebuild-genesis-state:
                 --intent-file /res/test-data/contract/mint/deploy.bin \
                 --compiled-contract-dir /toolkit-js/mint/out \
                 --rng-seed "$RNG_SEED" \
-                --to-bytes \
                 --dest-file /res/test-data/contract/mint/deploy_tx.mn \
             && /midnight-node-toolkit contract-address \
                 --src-file /res/test-data/contract/mint/deploy_tx.mn \
@@ -487,10 +475,16 @@ rebuild-genesis-state-mainnet:
         --NETWORK=mainnet \
         --FUND_FAUCET_WALLETS=false
 
+# rebuild-genesis-state-perfnet rebuilds the genesis ledger state for perfnet network - this MUST be followed by updating the chainspecs for CI to pass!
+rebuild-genesis-state-perfnet:
+    BUILD +rebuild-genesis-state \
+        --NETWORK=perfnet
+
 # rebuild-all-genesis-states rebuilds the genesis ledger state for all networks - this MUST be followed by updating the chainspecs for CI to pass!
 rebuild-all-genesis-states:
     BUILD +rebuild-genesis-state-undeployed
     BUILD +rebuild-genesis-state-devnet
+    BUILD +rebuild-genesis-state-perfnet
     BUILD +rebuild-genesis-state-govnet
     BUILD +rebuild-genesis-state-qanet
     # Preview is not meant to be reset
@@ -549,8 +543,9 @@ rebuild-all-chainspecs:
     BUILD +rebuild-chainspec --NETWORK=devnet
     BUILD +rebuild-chainspec --NETWORK=govnet
     BUILD +rebuild-chainspec --NETWORK=qanet
+    BUILD +rebuild-chainspec --NETWORK=perfnet
     # Preview is not meant to be reset
-    #BUILD +rebuild-chainspec --NETWORK=preview 
+    #BUILD +rebuild-chainspec --NETWORK=preview
     # Preprod is not meant to be reset
     #BUILD +rebuild-chainspec --NETWORK=preprod
     # Mainnet is not meant to be reset
@@ -761,7 +756,7 @@ toolkit-js-prep:
         tar -xJf node.tar.xz -C /usr/local --strip-components=1 && \
         rm node.tar.xz && \
         node --version && npm --version && \
-        npm install -g npm@11.8.0 && npm --version
+        npm install -g npm@11.11.0 && npm --version
 
     COPY COMPACTC_VERSION .
     COPY util/toolkit-js toolkit-js
@@ -905,14 +900,15 @@ test-pallet-fixtures:
     CACHE --sharing shared --id cargo-reg /usr/local/cargo/registry
     CACHE /target
 
-    # Compile the tests to go as fast as possible on this machine:
-    ENV RUSTFLAGS="-C target-cpu=native"
+    # These tests use a mock runtime (MockBlock<Test>), not the real WASM runtime.
+    # Debug mode skips LLVM optimization passes, compiling faster than release on free CI runners.
+    ENV SKIP_WASM_BUILD=1
     COPY .envrc ./bin/.envrc
     COPY static/contracts/simple-merkle-tree /test-static/simple-merkle-tree
     ENV MIDNIGHT_LEDGER_TEST_STATIC_DIR=/test-static
 
-    # Run pallet-midnight fixture tests only llvm-cov
-    RUN MIDNIGHT_LEDGER_EXPERIMENTAL=1 cargo nextest r --profile ci --release --locked \
+    # Run pallet-midnight fixture tests in debug mode (compiles much faster)
+    RUN MIDNIGHT_LEDGER_EXPERIMENTAL=1 cargo nextest r --profile ci --locked \
         -E 'test(/^tests::test_get_contract_state$/) | test(/^tests::test_send_mn_transaction$/) | test(/^tests::test_validation_works$/)'
     # RUN cargo llvm-cov report --html --release --output-dir /test-artifacts-pallet-fixtures-$NATIVEARCH/html
     # RUN cargo llvm-cov report --lcov --release --output-path /test-artifacts-pallet-fixtures-$NATIVEARCH/tests.lcov
@@ -1227,7 +1223,7 @@ toolkit-image:
         tar -xJf node.tar.xz -C /usr/local --strip-components=1 && \
         rm node.tar.xz && \
         node --version && npm --version && \
-        npm install -g npm@11.8.0 && npm --version
+        npm install -g npm@11.11.0 && npm --version
 
     # Add toolkit-js (only when INCLUDE_TOOLKIT_JS=true)
     # We use `--platform=linux/amd64` here because compactc doesn't release for linux/arm64
@@ -1309,6 +1305,7 @@ audit-npm:
         curl -fsSL https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-${NODE_ARCH}.tar.xz -o node.tar.xz && \
         tar -xJf node.tar.xz -C /usr/local --strip-components=1 && \
         rm node.tar.xz && \
+        npm install -g npm@11.11.0 && \
         node --version && npm --version
 
     COPY ${DIRECTORY} ${DIRECTORY}
@@ -1339,6 +1336,7 @@ audit-yarn:
         curl -fsSL https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-${NODE_ARCH}.tar.xz -o node.tar.xz && \
         tar -xJf node.tar.xz -C /usr/local --strip-components=1 && \
         rm node.tar.xz && \
+        npm install -g npm@11.11.0 && \
         node --version && npm --version
 
     # Install and enable corepack for yarn support
