@@ -1,7 +1,7 @@
 use cardano_serialization_lib::Address;
 use midnight_primitives_cnight_observation::{CNightAddresses, CardanoPosition, ObservedUtxos};
 use sidechain_domain::McBlockHash;
-use tonic::transport::Channel;
+use tonic::transport::{Channel, Endpoint};
 
 use crate::{
 	MidnightCNightObservationDataSource,
@@ -17,6 +17,26 @@ use crate::{
 const BLOCK_WINDOW: u32 = 1000;
 pub struct MidnightCNightObservationGrpcImpl {
 	pub client: MidnightStateClient<Channel>,
+}
+
+impl MidnightCNightObservationGrpcImpl {
+	pub async fn connect(
+		endpoint: impl AsRef<str>,
+	) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+		let endpoint_str = endpoint.as_ref().to_string();
+
+		let endpoint = Endpoint::from_shared(endpoint_str.clone())
+			.map_err(|e| format!("Invalid gRPC endpoint `{}`: {}", endpoint_str, e))?
+			.tcp_nodelay(true)
+			.http2_keep_alive_interval(std::time::Duration::from_secs(30))
+			.keep_alive_while_idle(true);
+
+		let channel = endpoint.connect().await.map_err(|e| {
+			format!("Failed to connect to gRPC server at `{}`: {}", endpoint_str, e)
+		})?;
+
+		Ok(Self { client: MidnightStateClient::new(channel) })
+	}
 }
 
 #[async_trait::async_trait]
@@ -46,18 +66,14 @@ impl MidnightCNightObservationDataSource for MidnightCNightObservationGrpcImpl {
 
 		let mut client = self.client.clone();
 
-		let creates = get_asset_creates(&mut client, start_block, end_block).await?;
-		let spends = get_asset_spends(&mut client, start_block, end_block).await?;
-		let registrations =
-			get_registrations(&mut client, cardano_network, start_block, end_block).await?;
-		let deregistrations =
-			get_deregistrations(&mut client, cardano_network, start_block, end_block).await?;
-
 		let mut utxos = Vec::new();
-		utxos.extend(creates);
-		utxos.extend(spends);
-		utxos.extend(registrations);
-		utxos.extend(deregistrations);
+		utxos.extend(get_asset_creates(&mut client, start_block, end_block).await?);
+		utxos.extend(get_asset_spends(&mut client, start_block, end_block).await?);
+		utxos
+			.extend(get_registrations(&mut client, cardano_network, start_block, end_block).await?);
+		utxos.extend(
+			get_deregistrations(&mut client, cardano_network, start_block, end_block).await?,
+		);
 
 		Ok(ObservedUtxos { start: start_position.clone(), end: start_position.clone(), utxos })
 	}
