@@ -1,5 +1,5 @@
 // This file is part of midnight-node.
-// Copyright (C) 2025-2026 Midnight Foundation
+// Copyright (C) Midnight Foundation
 // SPDX-License-Identifier: Apache-2.0
 // Licensed under the Apache License, Version 2.0 (the "License");
 // You may not use this file except in compliance with the License.
@@ -877,6 +877,7 @@ impl pallet_partner_chains_bridge::TransferHandler<BridgeRecipient>
 
 impl pallet_cnight_observation::Config for Runtime {
 	type MidnightSystemTransactionExecutor = MidnightSystem;
+	type WeightInfo = pallet_cnight_observation::weights::SubstrateWeight<Runtime>;
 }
 
 impl pallet_partner_chains_bridge::Config for Runtime {
@@ -1044,6 +1045,7 @@ mod benches {
 		[pallet_federated_authority, FederatedAuthority]
 		[pallet_federated_authority_observation, FederatedAuthorityObservation]
 		[pallet_system_parameters, SystemParameters]
+		[pallet_cnight_observation, CNightObservation]
 	);
 }
 

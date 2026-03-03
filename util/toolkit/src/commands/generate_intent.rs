@@ -220,6 +220,7 @@ pub async fn execute(
 #[cfg(test)]
 mod test {
 	use midnight_node_ledger_helpers::{Serializable, SigningKey};
+	use std::path::PathBuf;
 
 	use crate::cli::{Cli, run_command};
 	use clap::Parser;
@@ -232,8 +233,28 @@ mod test {
 		hex::encode(&bytes)
 	}
 
+	fn toolkit_js_prerequisites_ready() -> bool {
+		let toolkit_js_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../toolkit-js");
+		let required_paths = [
+			toolkit_js_dir.join("dist/bin.js"),
+			toolkit_js_dir.join("test/contract/managed/counter"),
+			toolkit_js_dir.join("node_modules/@tsconfig/node24/tsconfig.json"),
+		];
+
+		if let Some(missing) = required_paths.iter().find(|path| !path.exists()) {
+			eprintln!("Skipping generate-intent toolkit-js tests: missing {}", missing.display());
+			return false;
+		}
+
+		true
+	}
+
 	#[tokio::test]
 	async fn test_generate_deploy() {
+		if !toolkit_js_prerequisites_ready() {
+			return;
+		}
+
 		// as this is inside util/toolkit, current dir should move a few directories up
 		let toolkit_js_path = "../toolkit-js".to_string();
 		let config = format!("{toolkit_js_path}/test/contract/contract.config.ts");
@@ -271,6 +292,10 @@ mod test {
 
 	#[tokio::test]
 	async fn test_generate_circuit_call() {
+		if !toolkit_js_prerequisites_ready() {
+			return;
+		}
+
 		// as this is inside util/toolkit, current dir should move a few directories up
 		let toolkit_js_path = "../toolkit-js".to_string();
 		let config = format!("{toolkit_js_path}/test/contract/contract.config.ts");
@@ -329,6 +354,10 @@ mod test {
 
 	#[tokio::test]
 	async fn test_generate_maintain_contract() {
+		if !toolkit_js_prerequisites_ready() {
+			return;
+		}
+
 		// as this is inside util/toolkit, current dir should move a few directories up
 		let toolkit_js_path = "../toolkit-js".to_string();
 		let config = format!("{toolkit_js_path}/test/contract/contract.config.ts");
@@ -374,6 +403,10 @@ mod test {
 	#[tokio::test]
 	#[ignore = "test failing intermittently - reason unknown"]
 	async fn test_generate_maintain_circuit() {
+		if !toolkit_js_prerequisites_ready() {
+			return;
+		}
+
 		// as this is inside util/toolkit, current dir should move a few directories up
 		let toolkit_js_path = "../toolkit-js".to_string();
 		let config = format!("{toolkit_js_path}/test/contract/contract.config.ts");
@@ -421,6 +454,10 @@ mod test {
 
 	#[tokio::test]
 	async fn test_generate_maintain_remove_circuit() {
+		if !toolkit_js_prerequisites_ready() {
+			return;
+		}
+
 		// as this is inside util/toolkit, current dir should move a few directories up
 		let toolkit_js_path = "../toolkit-js".to_string();
 		let config = format!("{toolkit_js_path}/test/contract/contract.config.ts");
