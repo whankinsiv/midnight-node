@@ -12,7 +12,10 @@
 // limitations under the License.
 
 use authority_selection_inherents::AuthoritySelectionDataSource;
-use midnight_primitives_mainchain_follower::CandidatesDataSourceImpl;
+use midnight_primitives_mainchain_follower::{
+	CandidatesDataSourceImpl,
+	data_source::cnight_observation_grpc::MidnightCNightObservationGrpcImpl,
+};
 use pallet_sidechain_rpc::SidechainRpcDataSource;
 use partner_chains_db_sync_data_sources::{
 	BlockDataSourceImpl, CachedTokenBridgeDataSourceImpl, DbSyncBlockDataSourceConfig,
@@ -218,13 +221,17 @@ pub async fn create_cached_data_sources(
 	let mc_hash =
 		McHashDataSourceImpl::new(Arc::new(mc_hash_block_data_source), metrics_opt.clone());
 
-	let cnight_observation_pool =
-		get_connection(postgres_uri, CNIGHT_OBSERVATION_POOL_CFG, cfg.allow_non_ssl).await?;
-	let cnight_observation = MidnightCNightObservationDataSourceImpl::new(
-		cnight_observation_pool,
-		metrics_opt.clone(),
-		1000,
-	);
+	let cnight_observation: Arc<dyn MidnightCNightObservationDataSource + Send + Sync> =
+		if cfg.use_acropolis_grpc {
+			let endpoint = cfg.grpc_endpoint.clone().ok_or(missing("grpc_endpoint"))?;
+			let grpc_ds = MidnightCNightObservationGrpcImpl::connect(endpoint).await?;
+			Arc::new(grpc_ds)
+		} else {
+			let pool = get_connection(postgres_uri, CNIGHT_OBSERVATION_POOL_CFG, cfg.allow_non_ssl)
+				.await?;
+
+			Arc::new(MidnightCNightObservationDataSourceImpl::new(pool, metrics_opt.clone(), 1000))
+		};
 
 	let federated_authority_observation_pool =
 		get_connection(postgres_uri, FEDERATED_AUTHORITY_OBSERVATION_POOL_CFG, cfg.allow_non_ssl)
@@ -248,7 +255,7 @@ pub async fn create_cached_data_sources(
 		sidechain_rpc: Arc::new(sidechain_rpc),
 		mc_hash: Arc::new(mc_hash),
 		authority_selection: Arc::new(candidates_data_source_cached),
-		cnight_observation: Arc::new(cnight_observation),
+		cnight_observation,
 		bridge: Arc::new(bridge),
 		federated_authority_observation: Arc::new(federated_authority_observation),
 	})
