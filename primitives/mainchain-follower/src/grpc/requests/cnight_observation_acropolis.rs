@@ -13,8 +13,8 @@
 
 use crate::MidnightCNightObservationDataSourceImpl;
 use crate::midnight_state::{
-	AssetCreatesRequest, AssetSpendsRequest, DeregistrationsRequest, RegistrationsRequest,
-	midnight_state_client::MidnightStateClient,
+	AssetCreatesRequest, AssetSpendsRequest, BlockByHashRequest, DeregistrationsRequest,
+	RegistrationsRequest, midnight_state_client::MidnightStateClient,
 };
 use cardano_serialization_lib::{PlutusData, RewardAddress};
 use midnight_primitives_cnight_observation::{
@@ -278,4 +278,16 @@ pub(crate) async fn get_asset_spends(
 			})
 		})
 		.collect::<Result<Vec<_>, tonic::Status>>()
+}
+
+pub(crate) async fn get_block_number_by_hash(
+	client: &mut MidnightStateClient<Channel>,
+	block_hash: McBlockHash,
+) -> Result<u32, tonic::Status> {
+	let response = client
+		.get_block_by_hash(BlockByHashRequest { block_hash: block_hash.0.to_vec() })
+		.await?
+		.into_inner();
+
+	Ok(response.block_number as u32)
 }

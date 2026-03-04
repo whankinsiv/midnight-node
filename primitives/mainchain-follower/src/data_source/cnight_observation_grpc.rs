@@ -1,3 +1,5 @@
+use std::cmp::min;
+
 use cardano_serialization_lib::Address;
 use midnight_primitives_cnight_observation::{CNightAddresses, CardanoPosition, ObservedUtxos};
 use sidechain_domain::McBlockHash;
@@ -7,7 +9,8 @@ use crate::{
 	MidnightCNightObservationDataSource,
 	data_source::MidnightCNightObservationDataSourceError,
 	grpc::requests::cnight_observation_acropolis::{
-		get_asset_creates, get_asset_spends, get_deregistrations, get_registrations,
+		get_asset_creates, get_asset_spends, get_block_number_by_hash, get_deregistrations,
+		get_registrations,
 	},
 	midnight_state::midnight_state_client::MidnightStateClient,
 };
@@ -45,12 +48,9 @@ impl MidnightCNightObservationDataSource for MidnightCNightObservationGrpcImpl {
 		&self,
 		config: &CNightAddresses,
 		start_position: &CardanoPosition,
-		_current_tip: McBlockHash,
+		current_tip: McBlockHash,
 		_capacity: usize,
 	) -> Result<ObservedUtxos, Box<dyn std::error::Error + Send + Sync>> {
-		let start_block = start_position.block_number;
-		let end_block = start_block + BLOCK_WINDOW;
-
 		let mapping_validator_address = Address::from_bech32(&config.mapping_validator_address)
 			.map_err(|e| {
 				MidnightCNightObservationDataSourceError::MappingValidatorInvalidAddress(
@@ -66,6 +66,14 @@ impl MidnightCNightObservationDataSource for MidnightCNightObservationGrpcImpl {
 
 		let mut client = self.client.clone();
 
+		let tip_block_number =
+			get_block_number_by_hash(&mut client, current_tip.clone()).await.map_err(|_| {
+				MidnightCNightObservationDataSourceError::MissingBlockReference(current_tip)
+			})?;
+
+		let start_block = start_position.block_number;
+		let end_block = min(start_block + BLOCK_WINDOW, tip_block_number);
+
 		let mut utxos = Vec::new();
 		utxos.extend(get_asset_creates(&mut client, start_block, end_block).await?);
 		utxos.extend(get_asset_spends(&mut client, start_block, end_block).await?);
@@ -74,6 +82,7 @@ impl MidnightCNightObservationDataSource for MidnightCNightObservationGrpcImpl {
 		utxos.extend(
 			get_deregistrations(&mut client, cardano_network, start_block, end_block).await?,
 		);
+		utxos.sort();
 
 		Ok(ObservedUtxos { start: start_position.clone(), end: start_position.clone(), utxos })
 	}
