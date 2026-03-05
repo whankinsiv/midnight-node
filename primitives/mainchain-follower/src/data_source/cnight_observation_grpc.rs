@@ -1,23 +1,17 @@
-use std::cmp::min;
-
 use cardano_serialization_lib::Address;
-use midnight_primitives_cnight_observation::{CNightAddresses, CardanoPosition, ObservedUtxos};
+use midnight_primitives_cnight_observation::{
+	CNightAddresses, CardanoPosition, ObservedUtxo, ObservedUtxos,
+};
 use sidechain_domain::McBlockHash;
 use tonic::transport::{Channel, Endpoint};
 
 use crate::{
 	MidnightCNightObservationDataSource,
 	data_source::MidnightCNightObservationDataSourceError,
-	grpc::requests::cnight_observation_acropolis::{
-		get_asset_creates, get_asset_spends, get_block_number_by_hash, get_deregistrations,
-		get_registrations,
-	},
+	grpc::requests::cnight_observation_acropolis::{get_position_by_hash, get_utxo_events},
 	midnight_state::midnight_state_client::MidnightStateClient,
 };
 
-// Paginate mainchain queries in fixed block windows to avoid large gRPC responses.
-// The window size may need adjustment depending on chain activity and payload size.
-const BLOCK_WINDOW: u32 = 1000;
 pub struct MidnightCNightObservationGrpcImpl {
 	pub client: MidnightStateClient<Channel>,
 }
@@ -26,9 +20,9 @@ impl MidnightCNightObservationGrpcImpl {
 	pub async fn connect(
 		endpoint: impl AsRef<str>,
 	) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
-		let endpoint_str = endpoint.as_ref().to_string();
+		let endpoint_str = endpoint.as_ref();
 
-		let endpoint = Endpoint::from_shared(endpoint_str.clone())
+		let endpoint = Endpoint::from_shared(endpoint_str.to_string())
 			.map_err(|e| format!("Invalid gRPC endpoint `{}`: {}", endpoint_str, e))?
 			.tcp_nodelay(true)
 			.http2_keep_alive_interval(std::time::Duration::from_secs(30))
@@ -49,41 +43,67 @@ impl MidnightCNightObservationDataSource for MidnightCNightObservationGrpcImpl {
 		config: &CNightAddresses,
 		start_position: &CardanoPosition,
 		current_tip: McBlockHash,
-		_capacity: usize,
+		tx_capacity: usize,
 	) -> Result<ObservedUtxos, Box<dyn std::error::Error + Send + Sync>> {
-		let mapping_validator_address = Address::from_bech32(&config.mapping_validator_address)
-			.map_err(|e| {
-				MidnightCNightObservationDataSourceError::MappingValidatorInvalidAddress(
-					e.to_string(),
-				)
-			})?;
-
-		let cardano_network = mapping_validator_address.network_id().map_err(|_| {
-			MidnightCNightObservationDataSourceError::CardanoNetworkError(
-				config.mapping_validator_address.clone(),
-			)
-		})?;
+		let cardano_network = get_cardano_network(config)?;
 
 		let mut client = self.client.clone();
 
-		let tip_block_number =
-			get_block_number_by_hash(&mut client, current_tip.clone()).await.map_err(|_| {
-				MidnightCNightObservationDataSourceError::MissingBlockReference(current_tip)
-			})?;
+		let utxos = get_utxo_events(
+			&mut client,
+			cardano_network,
+			start_position.block_number,
+			start_position.tx_index_in_block,
+			tx_capacity,
+		)
+		.await
+		.map_err(MidnightCNightObservationDataSourceError::GRPCQueryError)?;
 
-		let start_block = start_position.block_number;
-		let end_block = min(start_block + BLOCK_WINDOW, tip_block_number);
+		let tx_count = count_distinct_transactions(&utxos);
 
-		let mut utxos = Vec::new();
-		utxos.extend(get_asset_creates(&mut client, start_block, end_block).await?);
-		utxos.extend(get_asset_spends(&mut client, start_block, end_block).await?);
-		utxos
-			.extend(get_registrations(&mut client, cardano_network, start_block, end_block).await?);
-		utxos.extend(
-			get_deregistrations(&mut client, cardano_network, start_block, end_block).await?,
-		);
-		utxos.sort();
+		let start = start_position.clone();
+		let end = if tx_count < tx_capacity {
+			let end =
+				get_position_by_hash(&mut client, current_tip.clone()).await.map_err(|_| {
+					MidnightCNightObservationDataSourceError::MissingBlockReference(current_tip)
+				})?;
+			end.increment()
+		} else {
+			utxos.last().map_or(start.clone(), |u| u.header.tx_position.clone()).increment()
+		};
 
-		Ok(ObservedUtxos { start: start_position.clone(), end: start_position.clone(), utxos })
+		Ok(ObservedUtxos { start, end, utxos })
 	}
+}
+
+#[allow(clippy::result_large_err)]
+fn get_cardano_network(
+	config: &CNightAddresses,
+) -> Result<u8, MidnightCNightObservationDataSourceError> {
+	let addr = Address::from_bech32(&config.mapping_validator_address).map_err(|e| {
+		MidnightCNightObservationDataSourceError::MappingValidatorInvalidAddress(e.to_string())
+	})?;
+
+	addr.network_id().map_err(|_| {
+		MidnightCNightObservationDataSourceError::CardanoNetworkError(
+			config.mapping_validator_address.clone(),
+		)
+	})
+}
+
+fn count_distinct_transactions(utxos: &[ObservedUtxo]) -> usize {
+	let mut tx_count = 0usize;
+	let mut last_tx: Option<(u32, u32)> = None;
+
+	for u in utxos {
+		let pos = &u.header.tx_position;
+		let cur = (pos.block_number, pos.tx_index_in_block);
+
+		if last_tx.is_none_or(|prev| prev < cur) {
+			tx_count += 1;
+			last_tx = Some(cur);
+		}
+	}
+
+	tx_count
 }

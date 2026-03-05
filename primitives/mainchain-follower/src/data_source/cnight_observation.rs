@@ -65,6 +65,10 @@ pub enum MidnightCNightObservationDataSourceError {
 	CardanoNetworkError(String),
 	#[error("Invalid value for mapping validator address")]
 	MappingValidatorInvalidAddress(String),
+	#[error("missing reference for block number `{0}`")]
+	MissingBlockNumberReference(u32),
+	#[error("Error querying gRPC `{0}`")]
+	GRPCQueryError(tonic::Status),
 }
 
 #[derive(thiserror::Error, Debug)]
