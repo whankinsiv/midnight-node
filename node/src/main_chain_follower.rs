@@ -15,6 +15,7 @@ use authority_selection_inherents::AuthoritySelectionDataSource;
 use midnight_primitives_mainchain_follower::{
 	CandidatesDataSourceImpl,
 	data_source::cnight_observation_grpc::MidnightCNightObservationGrpcImpl,
+	data_source::federated_authority_observation_grpc::FederatedAuthorityObservationGrpcImpl,
 };
 use pallet_sidechain_rpc::SidechainRpcDataSource;
 use partner_chains_db_sync_data_sources::{
@@ -77,9 +78,7 @@ pub(crate) async fn create_cached_main_chain_follower_data_sources(
 		Ok(mock)
 	} else {
 		create_cached_data_sources(cfg, metrics_opt).await.map_err(|err| {
-			ServiceError::Application(
-				format!("Failed to create db-sync main chain follower: {err}").into(),
-			)
+			ServiceError::Application(format!("Failed to create main chain follower: {err}").into())
 		})
 	}
 }
@@ -233,14 +232,22 @@ pub async fn create_cached_data_sources(
 			Arc::new(MidnightCNightObservationDataSourceImpl::new(pool, metrics_opt.clone(), 1000))
 		};
 
-	let federated_authority_observation_pool =
-		get_connection(postgres_uri, FEDERATED_AUTHORITY_OBSERVATION_POOL_CFG, cfg.allow_non_ssl)
-			.await?;
-	let federated_authority_observation = FederatedAuthorityObservationDataSourceImpl::new(
-		federated_authority_observation_pool,
-		metrics_opt.clone(),
-		1000,
-	);
+	let federated_authority_observation: Arc<
+		dyn FederatedAuthorityObservationDataSource + Send + Sync,
+	> = if cfg.use_acropolis_grpc {
+		let endpoint = cfg.grpc_endpoint.clone().ok_or(missing("grpc_endpoint"))?;
+		let grpc_ds = FederatedAuthorityObservationGrpcImpl::connect(endpoint).await?;
+		Arc::new(grpc_ds)
+	} else {
+		let pool = get_connection(
+			postgres_uri,
+			FEDERATED_AUTHORITY_OBSERVATION_POOL_CFG,
+			cfg.allow_non_ssl,
+		)
+		.await?;
+
+		Arc::new(FederatedAuthorityObservationDataSourceImpl::new(pool, metrics_opt.clone(), 1000))
+	};
 
 	let bridge_pool = get_connection(postgres_uri, BRIDGE_POOL_CFG, cfg.allow_non_ssl).await?;
 
@@ -257,7 +264,7 @@ pub async fn create_cached_data_sources(
 		authority_selection: Arc::new(candidates_data_source_cached),
 		cnight_observation,
 		bridge: Arc::new(bridge),
-		federated_authority_observation: Arc::new(federated_authority_observation),
+		federated_authority_observation,
 	})
 }
 
@@ -266,15 +273,21 @@ pub async fn create_cnight_observation_data_source(
 	cfg: MidnightCfg,
 	metrics_opt: Option<McFollowerMetrics>,
 ) -> Result<Arc<dyn MidnightCNightObservationDataSource>, Box<dyn Error + Send + Sync + 'static>> {
-	let pool = get_connection(
-		&cfg.db_sync_postgres_connection_string
-			.ok_or(missing("db_sync_postgres_connection_string"))?,
-		CNIGHT_OBSERVATION_POOL_CFG,
-		cfg.allow_non_ssl,
-	)
-	.await?;
+	if cfg.use_acropolis_grpc {
+		let endpoint = cfg.grpc_endpoint.clone().ok_or(missing("grpc_endpoint"))?;
+		let grpc_ds = MidnightCNightObservationGrpcImpl::connect(endpoint).await?;
+		Ok(Arc::new(grpc_ds))
+	} else {
+		let pool = get_connection(
+			&cfg.db_sync_postgres_connection_string
+				.ok_or(missing("db_sync_postgres_connection_string"))?,
+			CNIGHT_OBSERVATION_POOL_CFG,
+			cfg.allow_non_ssl,
+		)
+		.await?;
 
-	Ok(Arc::new(MidnightCNightObservationDataSourceImpl::new(pool, metrics_opt.clone(), 1000)))
+		Ok(Arc::new(MidnightCNightObservationDataSourceImpl::new(pool, metrics_opt.clone(), 1000)))
+	}
 }
 
 pub async fn create_federated_authority_observation_data_source(
@@ -282,15 +295,25 @@ pub async fn create_federated_authority_observation_data_source(
 	metrics_opt: Option<McFollowerMetrics>,
 ) -> Result<Arc<dyn FederatedAuthorityObservationDataSource>, Box<dyn Error + Send + Sync + 'static>>
 {
-	let pool = get_connection(
-		&cfg.db_sync_postgres_connection_string
-			.ok_or(missing("db_sync_postgres_connection_string"))?,
-		FEDERATED_AUTHORITY_OBSERVATION_POOL_CFG,
-		cfg.allow_non_ssl,
-	)
-	.await?;
+	if cfg.use_acropolis_grpc {
+		let endpoint = cfg.grpc_endpoint.clone().ok_or(missing("grpc_endpoint"))?;
+		let grpc_ds = FederatedAuthorityObservationGrpcImpl::connect(endpoint).await?;
+		Ok(Arc::new(grpc_ds))
+	} else {
+		let pool = get_connection(
+			&cfg.db_sync_postgres_connection_string
+				.ok_or(missing("db_sync_postgres_connection_string"))?,
+			FEDERATED_AUTHORITY_OBSERVATION_POOL_CFG,
+			cfg.allow_non_ssl,
+		)
+		.await?;
 
-	Ok(Arc::new(FederatedAuthorityObservationDataSourceImpl::new(pool, metrics_opt.clone(), 1000)))
+		Ok(Arc::new(FederatedAuthorityObservationDataSourceImpl::new(
+			pool,
+			metrics_opt.clone(),
+			1000,
+		)))
+	}
 }
 
 pub async fn create_authority_selection_data_source(

@@ -39,7 +39,8 @@ pub use {
 	data_source::{
 		CNightObservationDataSourceMock, CandidateDataSourceCached, CandidatesDataSourceImpl,
 		FederatedAuthorityObservationDataSourceImpl, FederatedAuthorityObservationDataSourceMock,
-		MidnightCNightObservationDataSourceImpl, get_epoch_for_block_hash,
+		FederatedAuthorityObservationGrpcImpl, MidnightCNightObservationDataSourceImpl,
+		get_epoch_for_block_hash,
 	},
 	inherent_provider::*,
 	partner_chains_db_sync_data_sources,

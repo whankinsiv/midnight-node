@@ -20,6 +20,7 @@ pub mod cnight_observation;
 pub mod cnight_observation_grpc;
 pub mod cnight_observation_mock;
 pub mod federated_authority_observation;
+pub mod federated_authority_observation_grpc;
 pub mod federated_authority_observation_mock;
 
 pub use candidates_data_source::CandidatesDataSourceImpl;
@@ -31,6 +32,7 @@ pub use cnight_observation::{
 };
 pub use cnight_observation_mock::CNightObservationDataSourceMock;
 pub use federated_authority_observation::FederatedAuthorityObservationDataSourceImpl;
+pub use federated_authority_observation_grpc::FederatedAuthorityObservationGrpcImpl;
 pub use federated_authority_observation_mock::FederatedAuthorityObservationDataSourceMock;
 
 pub use sqlx::PgPool;

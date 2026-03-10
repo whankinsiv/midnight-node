@@ -101,7 +101,8 @@ pub struct MidnightCfg {
 	/// Default: "midnight-node"
 	pub prometheus_push_job_name: Option<String>,
 
-	/// Utilize Acropolis gRPC data node instead of db sync
+	/// Utilize Acropolis gRPC data node for supported observation data sources
+	#[serde(default)]
 	pub use_acropolis_grpc: bool,
 
 	/// URL of the Acropolis gRPC server
@@ -132,17 +133,58 @@ fn main_chain_follower_vars(cfg: &MidnightCfg) -> Result<(), validation::Error> 
 		if cfg.block_stability_margin.is_none() {
 			return Err(missing("block_stability_margin"));
 		}
+		if cfg.db_sync_postgres_connection_string.is_none() {
+			return Err(missing("db_sync_postgres_connection_string"));
+		}
 		if cfg.use_acropolis_grpc {
 			if cfg.grpc_endpoint.is_none() {
 				return Err(missing("grpc_endpoint"));
 			}
-		} else {
-			if cfg.db_sync_postgres_connection_string.is_none() {
-				return Err(missing("db_sync_postgres_connection_string"));
-			}
 		}
 	}
 	Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn grpc_mode_requires_grpc_endpoint() {
+		let cfg = base_cfg(true);
+		let error = main_chain_follower_vars(&cfg).unwrap_err();
+		assert!(error.to_string().contains("grpc_endpoint"));
+	}
+
+	#[test]
+	fn grpc_mode_still_requires_db_sync_connection() {
+		let mut cfg = base_cfg(false);
+		cfg.use_acropolis_grpc = true;
+		cfg.grpc_endpoint = Some("http://midnight-indexer-preview:50051".to_string());
+		let error = main_chain_follower_vars(&cfg).unwrap_err();
+		assert!(error.to_string().contains("db_sync_postgres_connection_string"));
+	}
+
+	#[test]
+	fn db_sync_mode_accepts_existing_configuration_without_grpc_endpoint() {
+		let mut cfg = base_cfg(true);
+		cfg.use_acropolis_grpc = false;
+		assert!(main_chain_follower_vars(&cfg).is_ok());
+	}
+
+	fn base_cfg(with_db_sync: bool) -> MidnightCfg {
+		MidnightCfg {
+			use_main_chain_follower_mock: false,
+			cardano_security_parameter: Some(432),
+			cardano_active_slots_coeff: Some(0.05),
+			block_stability_margin: Some(10),
+			db_sync_postgres_connection_string: with_db_sync
+				.then_some("postgres://postgres:postgres@localhost:5432/cexplorer".to_string()),
+			use_acropolis_grpc: true,
+			grpc_endpoint: None,
+			..Default::default()
+		}
+	}
 }
 
 impl CfgHelp for MidnightCfg {
