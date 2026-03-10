@@ -14,6 +14,7 @@
 use authority_selection_inherents::AuthoritySelectionDataSource;
 use midnight_primitives_mainchain_follower::{
 	CandidatesDataSourceImpl,
+	data_source::candidates_data_source::candidates_data_source_grpc::CandidatesDataSourceGrpcImpl,
 	data_source::cnight_observation_grpc::MidnightCNightObservationGrpcImpl,
 };
 use pallet_sidechain_rpc::SidechainRpcDataSource;
@@ -197,10 +198,18 @@ pub async fn create_cached_data_sources(
 	// All these pools are connections to the same database, so we can use any pool to create the index
 	create_index_if_not_exists(&candidates_pool).await;
 
-	let candidates_data_source =
-		CandidatesDataSourceImpl::new(candidates_pool, metrics_opt.clone()).await?;
-	let candidates_data_source_cached =
-		candidates_data_source.cached(CANDIDATES_FOR_EPOCH_CACHE_SIZE)?;
+	let authority_selection: Arc<dyn AuthoritySelectionDataSource + Send + Sync> =
+		if cfg.use_acropolis_grpc {
+			let endpoint = cfg.grpc_endpoint.clone().ok_or(missing("grpc_endpoint"))?;
+			let grpc_ds = CandidatesDataSourceGrpcImpl::connect(endpoint).await?;
+			Arc::new(grpc_ds)
+		} else {
+			let candidates_data_source =
+				CandidatesDataSourceImpl::new(candidates_pool, metrics_opt.clone()).await?;
+			let candidates_data_source_cached =
+				candidates_data_source.cached(CANDIDATES_FOR_EPOCH_CACHE_SIZE)?;
+			Arc::new(candidates_data_source_cached)
+		};
 
 	let sidechain_pool =
 		get_connection(postgres_uri, SIDECHAIN_POOL_CFG, cfg.allow_non_ssl).await?;
@@ -254,7 +263,7 @@ pub async fn create_cached_data_sources(
 	Ok(DataSources {
 		sidechain_rpc: Arc::new(sidechain_rpc),
 		mc_hash: Arc::new(mc_hash),
-		authority_selection: Arc::new(candidates_data_source_cached),
+		authority_selection,
 		cnight_observation,
 		bridge: Arc::new(bridge),
 		federated_authority_observation: Arc::new(federated_authority_observation),

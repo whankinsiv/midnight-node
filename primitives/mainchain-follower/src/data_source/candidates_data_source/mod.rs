@@ -27,6 +27,7 @@ use std::collections::HashMap;
 use std::error::Error;
 
 pub mod cached;
+pub mod candidates_data_source_grpc;
 mod db_model;
 
 #[derive(Clone, Debug)]
@@ -37,7 +38,7 @@ struct ParsedCandidate {
 }
 
 #[derive(Debug)]
-struct RegisteredCandidate {
+pub struct RegisteredCandidate {
 	stake_pool_pub_key: StakePoolPublicKey,
 	registration_utxo: UtxoId,
 	tx_inputs: Vec<UtxoId>,
