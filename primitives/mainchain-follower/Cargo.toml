@@ -11,6 +11,7 @@ midnight-primitives-cnight-observation.workspace = true
 midnight-primitives-federated-authority-observation.workspace = true
 async-trait = { workspace = true, optional = true }
 sidechain-domain.workspace = true
+pallet-sidechain-rpc.workspace = true
 sp-api.workspace = true
 sp-blockchain = { workspace = true, optional = true }
 sp-runtime.workspace = true

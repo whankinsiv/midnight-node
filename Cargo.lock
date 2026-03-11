@@ -8181,6 +8181,7 @@ dependencies = [
  "lru 0.16.3",
  "midnight-primitives-cnight-observation",
  "midnight-primitives-federated-authority-observation",
+ "pallet-sidechain-rpc",
  "parity-scale-codec",
  "partner-chains-db-sync-data-sources",
  "partner-chains-plutus-data",

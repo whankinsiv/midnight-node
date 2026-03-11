@@ -53,6 +53,7 @@ impl McHashDataSourceGrpcImpl {
 		})
 	}
 }
+
 observed_async_trait!(
 impl McHashDataSource for McHashDataSourceGrpcImpl {
 	async fn get_latest_stable_block_for(

@@ -14,9 +14,12 @@
 use authority_selection_inherents::AuthoritySelectionDataSource;
 use midnight_primitives_mainchain_follower::{
 	CandidatesDataSourceImpl,
-	data_source::candidates_data_source::candidates_data_source_grpc::CandidatesDataSourceGrpcImpl,
-	data_source::cnight_observation_grpc::MidnightCNightObservationGrpcImpl,
-	data_source::mc_hash_data_source_grpc::McHashDataSourceGrpcImpl,
+	data_source::{
+		candidates_data_source::candidates_data_source_grpc::CandidatesDataSourceGrpcImpl,
+		cnight_observation_grpc::MidnightCNightObservationGrpcImpl,
+		mc_hash_data_source_grpc::McHashDataSourceGrpcImpl,
+		sidechain_rpc_data_source_grpc::SidechainRpcDataSourceGrpcImpl,
+	},
 };
 use pallet_sidechain_rpc::SidechainRpcDataSource;
 use partner_chains_db_sync_data_sources::{
@@ -212,15 +215,23 @@ pub async fn create_cached_data_sources(
 			Arc::new(candidates_data_source_cached)
 		};
 
-	let sidechain_pool =
-		get_connection(postgres_uri, SIDECHAIN_POOL_CFG, cfg.allow_non_ssl).await?;
-	let sidechain_block_data_source = Arc::new(BlockDataSourceImpl::from_config(
-		sidechain_pool,
-		db_sync_block_data_source_config.clone(),
-		&mc,
-	));
-	let sidechain_rpc =
-		SidechainRpcDataSourceImpl::new(sidechain_block_data_source.clone(), metrics_opt.clone());
+	let sidechain_rpc: Arc<dyn SidechainRpcDataSource + Send + Sync> = if cfg.use_acropolis_grpc {
+		let endpoint = cfg.grpc_endpoint.clone().ok_or(missing("grpc_endpoint"))?;
+		let grpc_ds = SidechainRpcDataSourceGrpcImpl::connect(endpoint).await?;
+		Arc::new(grpc_ds)
+	} else {
+		let sidechain_pool =
+			get_connection(postgres_uri, SIDECHAIN_POOL_CFG, cfg.allow_non_ssl).await?;
+		let sidechain_block_data_source = Arc::new(BlockDataSourceImpl::from_config(
+			sidechain_pool,
+			db_sync_block_data_source_config.clone(),
+			&mc,
+		));
+		Arc::new(SidechainRpcDataSourceImpl::new(
+			sidechain_block_data_source.clone(),
+			metrics_opt.clone(),
+		))
+	};
 
 	let mc_hash: Arc<dyn McHashDataSource + Send + Sync> = if cfg.use_acropolis_grpc {
 		let endpoint = cfg.grpc_endpoint.clone().ok_or(missing("grpc_endpoint"))?;
@@ -276,7 +287,7 @@ pub async fn create_cached_data_sources(
 	);
 
 	Ok(DataSources {
-		sidechain_rpc: Arc::new(sidechain_rpc),
+		sidechain_rpc,
 		mc_hash,
 		authority_selection,
 		cnight_observation,
