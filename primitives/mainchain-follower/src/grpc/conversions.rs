@@ -295,7 +295,7 @@ impl TryFrom<&EpochCandidate> for UtxoInfo {
 }
 
 #[allow(clippy::result_large_err)]
-fn hash32(bytes: Vec<u8>) -> Result<[u8; 32], Status> {
+pub fn hash32(bytes: Vec<u8>) -> Result<[u8; 32], Status> {
 	<[u8; 32]>::try_from(bytes.as_slice()).map_err(|_| Status::internal("invalid hash length"))
 }
 

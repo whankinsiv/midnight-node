@@ -16,6 +16,7 @@ use midnight_primitives_mainchain_follower::{
 	CandidatesDataSourceImpl,
 	data_source::candidates_data_source::candidates_data_source_grpc::CandidatesDataSourceGrpcImpl,
 	data_source::cnight_observation_grpc::MidnightCNightObservationGrpcImpl,
+	data_source::mc_hash_data_source_grpc::McHashDataSourceGrpcImpl,
 };
 use pallet_sidechain_rpc::SidechainRpcDataSource;
 use partner_chains_db_sync_data_sources::{
@@ -221,14 +222,28 @@ pub async fn create_cached_data_sources(
 	let sidechain_rpc =
 		SidechainRpcDataSourceImpl::new(sidechain_block_data_source.clone(), metrics_opt.clone());
 
-	let mc_hash_pool = get_connection(postgres_uri, MC_HASH_POOL_CFG, cfg.allow_non_ssl).await?;
-	let mc_hash_block_data_source = BlockDataSourceImpl::from_config(
-		mc_hash_pool,
-		db_sync_block_data_source_config.clone(),
-		&mc,
-	);
-	let mc_hash =
-		McHashDataSourceImpl::new(Arc::new(mc_hash_block_data_source), metrics_opt.clone());
+	let mc_hash: Arc<dyn McHashDataSource + Send + Sync> = if cfg.use_acropolis_grpc {
+		let endpoint = cfg.grpc_endpoint.clone().ok_or(missing("grpc_endpoint"))?;
+		let grpc_ds =
+			McHashDataSourceGrpcImpl::connect(endpoint, db_sync_block_data_source_config.clone())
+				.await?;
+
+		Arc::new(grpc_ds)
+	} else {
+		let mc_hash_pool =
+			get_connection(postgres_uri, MC_HASH_POOL_CFG, cfg.allow_non_ssl).await?;
+
+		let mc_hash_block_data_source = BlockDataSourceImpl::from_config(
+			mc_hash_pool,
+			db_sync_block_data_source_config.clone(),
+			&mc,
+		);
+
+		Arc::new(McHashDataSourceImpl::new(
+			Arc::new(mc_hash_block_data_source),
+			metrics_opt.clone(),
+		))
+	};
 
 	let cnight_observation: Arc<dyn MidnightCNightObservationDataSource + Send + Sync> =
 		if cfg.use_acropolis_grpc {
@@ -262,7 +277,7 @@ pub async fn create_cached_data_sources(
 
 	Ok(DataSources {
 		sidechain_rpc: Arc::new(sidechain_rpc),
-		mc_hash: Arc::new(mc_hash),
+		mc_hash,
 		authority_selection,
 		cnight_observation,
 		bridge: Arc::new(bridge),

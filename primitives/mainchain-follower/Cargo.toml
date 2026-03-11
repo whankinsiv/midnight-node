@@ -23,6 +23,8 @@ sqlx = { version = "0.8.5",  optional = true,  default-features = false, feature
 db-sync-sqlx = { workspace = true, optional = true }
 derive-new.workspace = true
 partner-chains-db-sync-data-sources = { default-features = false, workspace = true, optional = true }
+sidechain-mc-hash = { workspace = true, optional = true, features = ["mock"] }
+sp-timestamp.workspace = true
 scale-info.workspace = true
 log.workspace = true
 rand = { version = "0.9.1", default-features = false }
@@ -51,6 +53,7 @@ std = [
     "sidechain-domain/std",
     "midnight-primitives-federated-authority-observation/std",
     "midnight-primitives-cnight-observation/std",
+    "sidechain-mc-hash",
     "async-trait",
     "sp-inherents/std",
     "scale-info/std",

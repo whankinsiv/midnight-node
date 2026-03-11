@@ -21,6 +21,7 @@ pub mod cnight_observation_grpc;
 pub mod cnight_observation_mock;
 pub mod federated_authority_observation;
 pub mod federated_authority_observation_mock;
+pub mod mc_hash_data_source_grpc;
 
 pub use candidates_data_source::CandidatesDataSourceImpl;
 pub use candidates_data_source::cached::CandidateDataSourceCached;
