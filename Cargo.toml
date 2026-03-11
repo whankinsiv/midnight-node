@@ -74,14 +74,12 @@ transient-crypto = { version = "^2.0.0", package = "midnight-transient-crypto" }
 zswap = { version = "=7.0.3", package = "midnight-zswap" }
 zkir = { version = "^2.1.0", package = "midnight-zkir" }
 
-# Ledger 8 - from ledger-8.0.0 tag (compatible with layout-v2)
+# Ledger 8 (compatible with layout-v2)
+# coin-structure, transient-crypto and zkir share versions with L7 so reuse those entries.
 mn-ledger-8 = { git = "https://github.com/midnightntwrk/midnight-ledger", package = "midnight-ledger", tag = "ledger-8.0.0" }
 ledger-storage-ledger-8 = { git = "https://github.com/midnightntwrk/midnight-ledger", package = "midnight-storage", tag = "ledger-8.0.0", features = ["parity-db"] }
-coin-structure-ledger-8 = { git = "https://github.com/midnightntwrk/midnight-ledger", package = "midnight-coin-structure", tag = "ledger-8.0.0" }
 onchain-runtime-ledger-8 = { git = "https://github.com/midnightntwrk/midnight-ledger", package = "midnight-onchain-runtime", tag = "ledger-8.0.0" }
-transient-crypto-ledger-8 = { git = "https://github.com/midnightntwrk/midnight-ledger", package = "midnight-transient-crypto", tag = "ledger-8.0.0" }
 zswap-ledger-8 = { git = "https://github.com/midnightntwrk/midnight-ledger", package = "midnight-zswap", tag = "ledger-8.0.0" }
-zkir-ledger-8 = { git = "https://github.com/midnightntwrk/midnight-ledger", package = "midnight-zkir", tag = "ledger-8.0.0" }
 
 
 # Hard-fork test dependencies
@@ -363,12 +361,16 @@ zeroize = { opt-level = 3 }
 
 [patch.crates-io]
 cardano-serialization-lib = { git = "https://github.com/SupernaviX/cardano-serialization-lib", branch = "sg/patch-wasm-bindgen" }
-# Patch storage-core and its transitive deps to the same git tag as L8,
-# so crates.io and git instances share the same types.
+# Patch crates.io deps to the same git tag as L8 so crates.io and git
+# instances share the same types. Includes coin-structure, transient-crypto
+# and zkir which are shared between L7 and L8 (same version).
 midnight-storage-core = { git = "https://github.com/midnightntwrk/midnight-ledger", tag = "ledger-8.0.0" }
 midnight-serialize = { git = "https://github.com/midnightntwrk/midnight-ledger", tag = "ledger-8.0.0" }
 midnight-base-crypto = { git = "https://github.com/midnightntwrk/midnight-ledger", tag = "ledger-8.0.0" }
 midnight-storage-macros = { git = "https://github.com/midnightntwrk/midnight-ledger", tag = "ledger-8.0.0" }
+midnight-coin-structure = { git = "https://github.com/midnightntwrk/midnight-ledger", tag = "ledger-8.0.0" }
+midnight-transient-crypto = { git = "https://github.com/midnightntwrk/midnight-ledger", tag = "ledger-8.0.0" }
+midnight-zkir = { git = "https://github.com/midnightntwrk/midnight-ledger", tag = "ledger-8.0.0" }
 
 [workspace.metadata.cargo-shear]
 ignored = ["frame-storage-access-test-runtime"]
