@@ -37,6 +37,11 @@ use partner_chains_mock_data_sources::MockRegistrationsConfig;
 use sidechain_domain::mainchain_epoch::{Duration, MainchainEpochConfig, Timestamp};
 use std::{error::Error, str::FromStr as _, sync::Arc};
 
+use midnight_node_data_sources::{
+	AuthoritySelectionDataSourceGrpcImpl, FederatedAuthorityObservationGrpcImpl,
+	McHashDataSourceGrpcImpl, MidnightCNightObservationGrpcImpl, SidechainRpcDataSourceGrpcImpl,
+};
+
 use midnight_primitives_mainchain_follower::{
 	CNightObservationDataSourceMock, FederatedAuthorityObservationDataSource,
 	FederatedAuthorityObservationDataSourceImpl, FederatedAuthorityObservationDataSourceMock,
@@ -76,6 +81,12 @@ pub(crate) async fn create_cached_main_chain_follower_data_sources(
 		})?;
 
 		Ok(mock)
+	} else if cfg.grpc_endpoint.is_some() {
+		create_acropolis_data_sources(cfg).await.map_err(|err| {
+			ServiceError::Application(
+				format!("Failed to create grpc main chain follower: {err}").into(),
+			)
+		})
 	} else {
 		create_cached_data_sources(cfg, metrics_opt).await.map_err(|err| {
 			ServiceError::Application(format!("Failed to create main chain follower: {err}").into())
@@ -102,6 +113,43 @@ pub async fn create_mock_data_sources(
 		federated_authority_observation: Arc::new(
 			FederatedAuthorityObservationDataSourceMock::new(),
 		),
+		bridge: Arc::new(TokenBridgeDataSourceMock::<BridgeRecipient>::new()),
+	})
+}
+
+pub async fn create_acropolis_data_sources(
+	cfg: MidnightCfg,
+) -> std::result::Result<DataSources, Box<dyn Error + Send + Sync + 'static>> {
+	let endpoint = cfg.grpc_endpoint.clone().ok_or(missing("grpc_endpoint"))?;
+
+	let config = DbSyncBlockDataSourceConfig {
+		cardano_security_parameter: cfg
+			.cardano_security_parameter
+			.ok_or(missing("cardano_security_parameter"))?,
+		cardano_active_slots_coeff: cfg
+			.cardano_active_slots_coeff
+			.ok_or(missing("cardano_active_slots_coeff"))?,
+		block_stability_margin: cfg
+			.block_stability_margin
+			.ok_or(missing("block_stability_margin"))?,
+	};
+
+	let sidechain_rpc = Arc::new(SidechainRpcDataSourceGrpcImpl::connect(endpoint.clone()).await?);
+	let mc_hash = Arc::new(McHashDataSourceGrpcImpl::connect(endpoint.clone(), config).await?);
+	let authority_selection =
+		Arc::new(AuthoritySelectionDataSourceGrpcImpl::connect(endpoint.clone()).await?);
+	let cnight_observation: Arc<dyn MidnightCNightObservationDataSource + Send + Sync> =
+		Arc::new(MidnightCNightObservationGrpcImpl::connect(endpoint.clone()).await?);
+	let federated_authority_observation: Arc<
+		dyn FederatedAuthorityObservationDataSource + Send + Sync,
+	> = Arc::new(FederatedAuthorityObservationGrpcImpl::connect(endpoint).await?);
+
+	Ok(DataSources {
+		sidechain_rpc,
+		mc_hash,
+		authority_selection,
+		cnight_observation,
+		federated_authority_observation,
 		bridge: Arc::new(TokenBridgeDataSourceMock::<BridgeRecipient>::new()),
 	})
 }
@@ -221,7 +269,7 @@ pub async fn create_cached_data_sources(
 		McHashDataSourceImpl::new(Arc::new(mc_hash_block_data_source), metrics_opt.clone());
 
 	let cnight_observation: Arc<dyn MidnightCNightObservationDataSource + Send + Sync> =
-		if cfg.use_acropolis_grpc {
+		if cfg.grpc_endpoint.is_some() {
 			let endpoint = cfg.grpc_endpoint.clone().ok_or(missing("grpc_endpoint"))?;
 			let grpc_ds = MidnightCNightObservationGrpcImpl::connect(endpoint).await?;
 			Arc::new(grpc_ds)
@@ -234,7 +282,7 @@ pub async fn create_cached_data_sources(
 
 	let federated_authority_observation: Arc<
 		dyn FederatedAuthorityObservationDataSource + Send + Sync,
-	> = if cfg.use_acropolis_grpc {
+	> = if cfg.grpc_endpoint.is_some() {
 		let endpoint = cfg.grpc_endpoint.clone().ok_or(missing("grpc_endpoint"))?;
 		let grpc_ds = FederatedAuthorityObservationGrpcImpl::connect(endpoint).await?;
 		Arc::new(grpc_ds)
@@ -273,7 +321,7 @@ pub async fn create_cnight_observation_data_source(
 	cfg: MidnightCfg,
 	metrics_opt: Option<McFollowerMetrics>,
 ) -> Result<Arc<dyn MidnightCNightObservationDataSource>, Box<dyn Error + Send + Sync + 'static>> {
-	if cfg.use_acropolis_grpc {
+	if cfg.grpc_endpoint.is_some() {
 		let endpoint = cfg.grpc_endpoint.clone().ok_or(missing("grpc_endpoint"))?;
 		let grpc_ds = MidnightCNightObservationGrpcImpl::connect(endpoint).await?;
 		Ok(Arc::new(grpc_ds))
@@ -295,7 +343,7 @@ pub async fn create_federated_authority_observation_data_source(
 	metrics_opt: Option<McFollowerMetrics>,
 ) -> Result<Arc<dyn FederatedAuthorityObservationDataSource>, Box<dyn Error + Send + Sync + 'static>>
 {
-	if cfg.use_acropolis_grpc {
+	if cfg.grpc_endpoint.is_some() {
 		let endpoint = cfg.grpc_endpoint.clone().ok_or(missing("grpc_endpoint"))?;
 		let grpc_ds = FederatedAuthorityObservationGrpcImpl::connect(endpoint).await?;
 		Ok(Arc::new(grpc_ds))

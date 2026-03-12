@@ -7622,6 +7622,7 @@ dependencies = [
  "jsonrpsee",
  "local-ip-address",
  "log",
+ "midnight-node-data-sources",
  "midnight-node-ledger",
  "midnight-node-ledger-helpers",
  "midnight-node-res",
@@ -7712,6 +7713,34 @@ dependencies = [
  "thiserror 1.0.69",
  "time-source",
  "tokio",
+]
+
+[[package]]
+name = "midnight-node-data-sources"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "authority-selection-inherents",
+ "cardano-serialization-lib 14.1.2",
+ "log",
+ "midnight-primitives-cnight-observation",
+ "midnight-primitives-federated-authority-observation",
+ "midnight-primitives-mainchain-follower",
+ "pallet-sidechain-rpc",
+ "partner-chains-plutus-data",
+ "prost 0.13.5",
+ "protoc-bin-vendored",
+ "serde",
+ "serde_json",
+ "sidechain-domain",
+ "sidechain-mc-hash",
+ "sp-core",
+ "sp-timestamp",
+ "thiserror 1.0.69",
+ "tokio",
+ "tokio-stream",
+ "tonic 0.12.3",
+ "tonic-build",
 ]
 
 [[package]]
