@@ -1,6 +1,9 @@
-use crate::grpc::{midnight_state::midnight_state_client::MidnightStateClient, requests::mc_hash_data_source_acropolis::{
-	get_block_by_hash, get_latest_stable_block, get_stable_block,
-}};
+use crate::grpc::{
+	midnight_state::midnight_state_client::MidnightStateClient,
+	requests::mc_hash_data_source_acropolis::{
+		get_block_by_hash, get_latest_stable_block, get_stable_block,
+	},
+};
 use midnight_primitives_mainchain_follower::partner_chains_db_sync_data_sources::DbSyncBlockDataSourceConfig;
 use sidechain_domain::{MainchainBlock, McBlockHash};
 use sidechain_mc_hash::McHashDataSource;

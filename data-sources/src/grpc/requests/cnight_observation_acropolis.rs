@@ -40,7 +40,7 @@ pub(crate) async fn get_position_by_hash(
 
 	Ok(CardanoPosition {
 		block_hash,
-		block_number: response.block_number as u32,
+		block_number: response.block_number,
 		block_timestamp: TimestampUnixMillis(response.block_timestamp_unix * 1000),
 		tx_index_in_block: response.tx_count,
 	})

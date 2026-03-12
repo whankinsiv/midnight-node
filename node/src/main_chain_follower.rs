@@ -36,6 +36,7 @@ use std::{error::Error, str::FromStr as _, sync::Arc};
 use midnight_node_data_sources::{
 	AuthoritySelectionDataSourceGrpcImpl, FederatedAuthorityObservationGrpcImpl,
 	McHashDataSourceGrpcImpl, MidnightCNightObservationGrpcImpl, SidechainRpcDataSourceGrpcImpl,
+	TokenBridgeDataSourceGrpcImpl,
 };
 
 use midnight_primitives_mainchain_follower::{
@@ -140,7 +141,9 @@ pub async fn create_acropolis_data_sources(
 		Arc::new(MidnightCNightObservationGrpcImpl::connect(endpoint.clone()).await?);
 	let federated_authority_observation: Arc<
 		dyn FederatedAuthorityObservationDataSource + Send + Sync,
-	> = Arc::new(FederatedAuthorityObservationGrpcImpl::connect(endpoint).await?);
+	> = Arc::new(FederatedAuthorityObservationGrpcImpl::connect(endpoint.clone()).await?);
+	let bridge: Arc<dyn TokenBridgeDataSource<BridgeRecipient> + Send + Sync> =
+		Arc::new(TokenBridgeDataSourceGrpcImpl::connect(endpoint).await?);
 
 	Ok(DataSources {
 		sidechain_rpc,
@@ -148,7 +151,7 @@ pub async fn create_acropolis_data_sources(
 		authority_selection,
 		cnight_observation,
 		federated_authority_observation,
-		bridge: Arc::new(TokenBridgeDataSourceMock::<BridgeRecipient>::new()),
+		bridge,
 	})
 }
 
