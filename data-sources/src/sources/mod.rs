@@ -1,6 +1,7 @@
 use sidechain_domain::McBlockHash;
 
 pub mod authority_selection;
+pub mod bridge;
 pub mod cnight_observation;
 pub mod federated_authority;
 pub mod mc_hash;

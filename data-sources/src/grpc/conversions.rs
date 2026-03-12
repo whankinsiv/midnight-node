@@ -19,7 +19,7 @@ use std::{collections::HashMap, convert::TryFrom};
 use tonic::Status;
 
 use crate::grpc::midnight_state::{
-	EpochCandidate, StakePoolEntry, UtxoEvent, UtxoId as UtxoIdProto, utxo_event::Kind
+	EpochCandidate, StakePoolEntry, UtxoEvent, UtxoId as UtxoIdProto, utxo_event::Kind,
 };
 
 #[derive(Debug)]

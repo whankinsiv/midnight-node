@@ -19,6 +19,7 @@ pallet-sidechain-rpc = { workspace = true }
 sidechain-mc-hash = { workspace = true }
 sidechain-domain = { workspace = true }
 partner-chains-plutus-data = { workspace = true }
+sp-partner-chains-bridge = { workspace = true }
 
 # substrate
 sp-core = { workspace = true }
@@ -53,6 +54,7 @@ std = [
     "midnight-primitives-federated-authority-observation/std",
     "authority-selection-inherents/std",
     "sidechain-domain/std",
+    "sp-partner-chains-bridge/std",
     "sp-core/std",
     "sp-timestamp/std",
     "log/std",

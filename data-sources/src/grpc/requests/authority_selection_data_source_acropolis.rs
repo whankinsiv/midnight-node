@@ -1,6 +1,12 @@
 use std::collections::HashMap;
 
-use crate::grpc::{conversions::{get_stake_delegation, make_stake_map}, midnight_state::{AriadneParametersRequest, EpochCandidatesRequest, EpochNonceRequest, midnight_state_client::MidnightStateClient}};
+use crate::grpc::{
+	conversions::{get_stake_delegation, make_stake_map},
+	midnight_state::{
+		AriadneParametersRequest, EpochCandidatesRequest, EpochNonceRequest,
+		midnight_state_client::MidnightStateClient,
+	},
+};
 use cardano_serialization_lib::PlutusData;
 use partner_chains_plutus_data::permissioned_candidates::PermissionedCandidateDatums;
 use sidechain_domain::{
