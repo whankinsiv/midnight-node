@@ -5,9 +5,12 @@ use sidechain_domain::{
 use tonic::transport::{Channel, Endpoint};
 
 use crate::{
-	grpc::{midnight_state::midnight_state_client::MidnightStateClient, requests::candidates_data_source_acropolis::{
-		get_candidates, get_epoch_nonce, get_permissioned_candidates,
-	}},
+	grpc::{
+		midnight_state::midnight_state_client::MidnightStateClient,
+		requests::authority_selection_data_source_acropolis::{
+			get_candidates, get_epoch_nonce, get_permissioned_candidates,
+		},
+	},
 	sources::cnight_observation::grpc::AcropolisCNightObservationDataSourceError,
 };
 
