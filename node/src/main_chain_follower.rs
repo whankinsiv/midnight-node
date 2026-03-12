@@ -77,7 +77,7 @@ pub(crate) async fn create_cached_main_chain_follower_data_sources(
 		})?;
 
 		Ok(mock)
-	} else if cfg.use_acropolis_grpc {
+	} else if cfg.grpc_endpoint.is_some() {
 		create_acropolis_data_sources(cfg).await.map_err(|err| {
 			ServiceError::Application(
 				format!("Failed to create grpc main chain follower: {err}").into(),
