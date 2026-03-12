@@ -101,9 +101,6 @@ pub struct MidnightCfg {
 	/// Default: "midnight-node"
 	pub prometheus_push_job_name: Option<String>,
 
-	/// Utilize Acropolis gRPC data node instead of db sync
-	pub use_acropolis_grpc: bool,
-
 	/// URL of the Acropolis gRPC server
 	pub grpc_endpoint: Option<String>,
 }
@@ -132,13 +129,9 @@ fn main_chain_follower_vars(cfg: &MidnightCfg) -> Result<(), validation::Error> 
 		if cfg.block_stability_margin.is_none() {
 			return Err(missing("block_stability_margin"));
 		}
-		if cfg.use_acropolis_grpc {
-			if cfg.grpc_endpoint.is_none() {
-				return Err(missing("grpc_endpoint"));
-			}
-		} else {
+		if cfg.grpc_endpoint.is_none() {
 			if cfg.db_sync_postgres_connection_string.is_none() {
-				return Err(missing("db_sync_postgres_connection_string"));
+				return Err(missing("db_sync_postgres_connection_string or grpc_endpoint"));
 			}
 		}
 	}
