@@ -1,0 +1,61 @@
+[package]
+name = "midnight-node-data-sources"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+
+[dependencies]
+# workspace primitives
+midnight-primitives-mainchain-follower = { workspace = true }
+midnight-primitives-cnight-observation = { workspace = true }
+midnight-primitives-federated-authority-observation = { workspace = true }
+
+# partner chains
+authority-selection-inherents = { workspace = true }
+pallet-sidechain-rpc = { workspace = true }
+sidechain-mc-hash = { workspace = true }
+sidechain-domain = { workspace = true }
+partner-chains-plutus-data = { workspace = true }
+
+# substrate
+sp-core = { workspace = true }
+sp-timestamp = { workspace = true }
+
+# shared libs
+cardano-serialization-lib = { workspace = true }
+async-trait = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+log = { workspace = true }
+thiserror = { workspace = true }
+
+# grpc
+tonic = { version = "0.12", optional = true }
+prost = { version = "0.13", optional = true }
+
+[build-dependencies]
+tonic-build = "0.12"
+protoc-bin-vendored = "3"
+
+[dev-dependencies]
+tokio = { workspace = true }
+tokio-stream = { version = "0.1", features = ["net"] }
+
+[features]
+default = ["std"]
+
+std = [
+    "midnight-primitives-mainchain-follower/std",
+    "midnight-primitives-cnight-observation/std",
+    "midnight-primitives-federated-authority-observation/std",
+    "authority-selection-inherents/std",
+    "sidechain-domain/std",
+    "sp-core/std",
+    "sp-timestamp/std",
+    "log/std",
+    "tonic/transport",
+    "prost",
+]
