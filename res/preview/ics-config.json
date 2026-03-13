@@ -1,9 +1,25 @@
 {
   "illiquid_circulation_supply_validator_address": "addr_test1wzga9g4tw69twfvpjynyvdyzvpf5f0e88v6hnu9eh9qgdnqaw66xk",
   "asset": {
-    "policy_id": "d2dbff622e509dda256fedbd31ef6e9fd98ed49ad91d5c0e07f68af1",
-    "asset_name": ""
+    "policy_id": "0xd2dbff622e509dda256fedbd31ef6e9fd98ed49ad91d5c0e07f68af1",
+    "asset_name": "NIGHT"
   },
-  "utxos": [],
-  "total_amount": 0
+  "utxos": [
+    {
+      "tx_hash": "b0b4c153d3d3914126a5cb9b3e8f10490486f2519869dfc6ded86e09bb034e24",
+      "output_index": 0,
+      "amount": 50000000
+    },
+    {
+      "tx_hash": "93e5fdd56d7425b39b04861fffe87d64ab07a2e395da96f98090af86cf69e619",
+      "output_index": 0,
+      "amount": 45000000
+    },
+    {
+      "tx_hash": "93e5fdd56d7425b39b04861fffe87d64ab07a2e395da96f98090af86cf69e619",
+      "output_index": 1,
+      "amount": 43000000
+    }
+  ],
+  "total_amount": 138000000
 }
