@@ -1,6 +1,7 @@
 use authority_selection_inherents::{AriadneParameters, AuthoritySelectionDataSource};
 use sidechain_domain::{
 	CandidateRegistrations, DParameter, EpochNonce, MainchainAddress, McEpochNumber, PolicyId,
+	offset_data_epoch,
 };
 use tonic::transport::{Channel, Endpoint};
 
@@ -84,7 +85,13 @@ impl AuthoritySelectionDataSource for AuthoritySelectionDataSourceGrpcImpl {
 		&self,
 		for_epoch: McEpochNumber,
 	) -> Result<McEpochNumber, Box<dyn std::error::Error + Send + Sync>> {
-		Ok(for_epoch)
+		offset_data_epoch(&for_epoch).map_err(|offset| {
+			format!(
+				"Minimum supported epoch of data usage is {offset}, but {} was provided",
+				for_epoch.0
+			)
+			.into()
+		})
 	}
 }
 
