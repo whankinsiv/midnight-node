@@ -7735,6 +7735,7 @@ dependencies = [
  "sidechain-domain",
  "sidechain-mc-hash",
  "sp-core",
+ "sp-partner-chains-bridge",
  "sp-runtime",
  "sp-timestamp",
  "thiserror 1.0.69",

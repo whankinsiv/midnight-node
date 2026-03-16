@@ -291,15 +291,26 @@ pub mod pallet {
 
 			let parsed =
 				Self::get_data_from_inherent_data(data).ok_or(InherentError::MalformedInherent)?;
-			log::info!(
-				"Parsed UTxOs[0] tx_hash={}",
-				parsed.utxos.first().map(|u| u.header.tx_hash)
-			);
-			log::info!("Inherent UTxOs[0] tx_hash={}", utxos.);
+
+			let parsed_first_tx_hash = parsed.utxos.first().map(|u| &u.header.tx_hash);
+			let inherent_first_tx_hash = utxos.first().map(|u| &u.header.tx_hash);
+
 			if parsed.utxos != *utxos {
+				log::warn!(
+					"cNIGHT inherent UTxO mismatch: parsed_count={} inherent_count={} parsed_first_tx_hash={:?} inherent_first_tx_hash={:?}",
+					parsed.utxos.len(),
+					utxos.len(),
+					parsed_first_tx_hash,
+					inherent_first_tx_hash,
+				);
 				return Err(InherentError::UTxOMismatch);
 			}
 			if parsed.next_cardano_position != *next_cardano_position {
+				log::warn!(
+					"cNIGHT inherent position mismatch: parsed={:?} inherent={:?}",
+					parsed.next_cardano_position,
+					next_cardano_position,
+				);
 				return Err(InherentError::PositionMismatch);
 			}
 			Ok(())
