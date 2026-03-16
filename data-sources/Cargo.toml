@@ -23,6 +23,7 @@ partner-chains-plutus-data = { workspace = true }
 # substrate
 sp-core = { workspace = true }
 sp-timestamp = { workspace = true }
+sp-runtime = { workspace = true }
 
 # shared libs
 cardano-serialization-lib = { workspace = true }
@@ -48,6 +49,7 @@ tokio-stream = { version = "0.1", features = ["net"] }
 default = ["std"]
 
 std = [
+    "sp-runtime/std",
     "midnight-primitives-mainchain-follower/std",
     "midnight-primitives-cnight-observation/std",
     "midnight-primitives-federated-authority-observation/std",

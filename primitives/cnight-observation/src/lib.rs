@@ -215,8 +215,12 @@ pub enum InherentError {
 	UnexpectedTokenObserveInherent(Option<Vec<Vec<u8>>>, Option<Vec<Vec<u8>>>),
 	#[cfg_attr(feature = "std", error("Inherent data missing"))]
 	Missing,
-	#[cfg_attr(feature = "std", error("Other unexpected inherent error"))]
-	Other,
+	#[cfg_attr(feature = "std", error("UTxO mismatch inherent error"))]
+	UTxOMismatch,
+	#[cfg_attr(feature = "std", error("Position mismatch inherent error"))]
+	PositionMismatch,
+	#[cfg_attr(feature = "std", error("Malformed inherent data"))]
+	MalformedInherent,
 }
 
 impl sp_inherents::IsFatalError for InherentError {
