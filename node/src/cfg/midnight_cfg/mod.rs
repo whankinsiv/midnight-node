@@ -100,6 +100,9 @@ pub struct MidnightCfg {
 	/// Job name label to include with pushed metrics.
 	/// Default: "midnight-node"
 	pub prometheus_push_job_name: Option<String>,
+
+	/// URL of the Acropolis gRPC server
+	pub grpc_endpoint: Option<String>,
 }
 
 fn main_chain_follower_vars(cfg: &MidnightCfg) -> Result<(), validation::Error> {
@@ -117,9 +120,6 @@ fn main_chain_follower_vars(cfg: &MidnightCfg) -> Result<(), validation::Error> 
 			));
 		}
 	} else {
-		if cfg.db_sync_postgres_connection_string.is_none() {
-			return Err(missing("db_sync_postgres_connection_string"));
-		}
 		if cfg.cardano_security_parameter.is_none() {
 			return Err(missing("cardano_security_parameter"));
 		}
@@ -128,6 +128,11 @@ fn main_chain_follower_vars(cfg: &MidnightCfg) -> Result<(), validation::Error> 
 		}
 		if cfg.block_stability_margin.is_none() {
 			return Err(missing("block_stability_margin"));
+		}
+		if cfg.grpc_endpoint.is_none() {
+			if cfg.db_sync_postgres_connection_string.is_none() {
+				return Err(missing("db_sync_postgres_connection_string or grpc_endpoint"));
+			}
 		}
 	}
 	Ok(())

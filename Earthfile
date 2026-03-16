@@ -127,7 +127,7 @@ subxt:
 build-node-only:
     FROM +build-prepare
     COPY --keep-ts --dir Cargo.lock Cargo.toml docs .sqlx \
-    ledger node pallets primitives metadata res runtime util tests relay .
+    ledger node pallets primitives metadata res runtime util tests relay data-sources .
 
     ARG NATIVEARCH
 
@@ -1008,7 +1008,7 @@ build:
     # CACHE --sharing shared --id cargo-reg /usr/local/cargo/registry
     # CACHE /target
     COPY --keep-ts --dir Cargo.lock Cargo.toml docs .sqlx \
-    ledger node pallets primitives metadata res runtime util tests relay COMPACTC_VERSION .
+    ledger node pallets primitives metadata res runtime util tests relay COMPACTC_VERSION data-sources .
 
     ARG NATIVEARCH
 
@@ -1041,7 +1041,7 @@ build-fork:
     # CACHE --sharing shared --id cargo-reg /usr/local/cargo/registry
     # CACHE /target
     COPY --keep-ts --dir Cargo.lock Cargo.toml docs .sqlx \
-    ledger node pallets primitives res metadata runtime util tests relay .
+    ledger node pallets primitives res metadata runtime util tests relay data-sources .
 
     RUN mkdir -p /artifacts-$NATIVEARCH/test && mkdir -p /artifacts-$NATIVEARCH/rollback
     RUN SKIP_WASM_BUILD=1 cargo build -p upgrader --locked --release \
@@ -1063,7 +1063,7 @@ build-fork:
 build-benchmarks:
     FROM +build-prepare
     COPY --keep-ts --dir Cargo.lock Cargo.toml docs .sqlx \
-    ledger node pallets primitives metadata res runtime util tests .
+    ledger node pallets primitives metadata res runtime util tests data-sources .
 
     ARG NATIVEARCH
 
@@ -1457,7 +1457,7 @@ testnet-sync-e2e:
 local-env-e2e:
     FROM +prep
     COPY --keep-ts --dir Cargo.lock Cargo.toml docs .sqlx \
-    ledger node pallets primitives metadata res runtime util tests local-environment scripts .
+    ledger node pallets primitives metadata res runtime util tests local-environment scripts data-sources .
     WORKDIR tests/e2e
     RUN cargo test --test e2e_tests -- --test-threads=4 --nocapture
 

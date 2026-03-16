@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
+    "data-sources",
     "ledger",
     "ledger/helpers",
     "metadata",
@@ -101,6 +102,7 @@ midnight-serialize = { version = "=1.0.0", package = "midnight-serialize" }
 midnight-serialize-hf = { git = "https://github.com/midnightntwrk/midnight-ledger", package = "midnight-serialize", tag = "hard-fork-test-ledger-8.0.0" }
 
 # Midnight local dependencies
+midnight-node-data-sources = { path = "data-sources" }
 midnight-node-ledger = { path = "ledger", default-features = false }
 midnight-node-metadata = { path = "metadata", default-features = false }
 midnight-node-ledger-helpers = { path = "ledger/helpers", default-features = false, features = ["test-utils"] }
