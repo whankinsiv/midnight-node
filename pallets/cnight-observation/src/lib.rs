@@ -289,9 +289,18 @@ pub mod pallet {
 				return Ok(());
 			};
 
-			let parsed = Self::get_data_from_inherent_data(data).ok_or(InherentError::Other)?;
-			if parsed.utxos != *utxos || parsed.next_cardano_position != *next_cardano_position {
-				return Err(InherentError::Other);
+			let parsed =
+				Self::get_data_from_inherent_data(data).ok_or(InherentError::MalformedInherent)?;
+			log::info!(
+				"Parsed UTxOs[0] tx_hash={}",
+				parsed.utxos.first().map(|u| u.header.tx_hash)
+			);
+			log::info!("Inherent UTxOs[0] tx_hash={}", utxos.);
+			if parsed.utxos != *utxos {
+				return Err(InherentError::UTxOMismatch);
+			}
+			if parsed.next_cardano_position != *next_cardano_position {
+				return Err(InherentError::PositionMismatch);
 			}
 			Ok(())
 		}
