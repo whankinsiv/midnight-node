@@ -1,6 +1,12 @@
 use std::collections::HashMap;
 
-use crate::grpc::{conversions::{get_stake_delegation, make_stake_map}, midnight_state::{AriadneParametersRequest, EpochCandidatesRequest, EpochNonceRequest, midnight_state_client::MidnightStateClient}};
+use crate::grpc::{
+	conversions::{get_stake_delegation, make_stake_map},
+	midnight_state::{
+		AriadneParametersRequest, EpochCandidatesRequest, EpochNonceRequest,
+		midnight_state_client::MidnightStateClient,
+	},
+};
 use cardano_serialization_lib::PlutusData;
 use partner_chains_plutus_data::permissioned_candidates::PermissionedCandidateDatums;
 use sidechain_domain::{
@@ -21,10 +27,11 @@ pub async fn get_permissioned_candidates(
 	if response.datum.is_empty() {
 		Ok(None)
 	} else {
-		let datums = PermissionedCandidateDatums::try_from(PlutusData::new_bytes(response.datum))
-			.map_err(|e| {
-			Status::internal(format!("failed to decode Ariadne parameters: {e}"))
-		})?;
+		let datums =
+			PermissionedCandidateDatums::try_from(PlutusData::from_bytes(response.datum).map_err(
+				|e| Status::internal(format!("failed to parse Ariadne parameters datum: {e}")),
+			)?)
+			.map_err(|e| Status::internal(format!("failed to decode Ariadne parameters: {e}")))?;
 
 		Ok(Some(datums.into()))
 	}

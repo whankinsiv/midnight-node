@@ -19,7 +19,7 @@ use std::{collections::HashMap, convert::TryFrom};
 use tonic::Status;
 
 use crate::grpc::midnight_state::{
-	EpochCandidate, StakePoolEntry, UtxoEvent, UtxoId as UtxoIdProto, utxo_event::Kind
+	EpochCandidate, StakePoolEntry, UtxoEvent, UtxoId as UtxoIdProto, utxo_event::Kind,
 };
 
 #[derive(Debug)]
@@ -192,8 +192,11 @@ impl TryFrom<EpochCandidate> for (StakePoolPublicKey, sidechain_domain::Registra
 			.map(UtxoId::try_from)
 			.collect::<Result<Vec<_>, _>>()?;
 
-		let datum = RegisterValidatorDatum::try_from(PlutusData::new_bytes(value.full_datum))
-			.map_err(|_| CandidateConversionError::InvalidDatum)?;
+		let datum = RegisterValidatorDatum::try_from(
+			PlutusData::from_bytes(value.full_datum)
+				.map_err(|_| CandidateConversionError::InvalidDatum)?,
+		)
+		.map_err(|_| CandidateConversionError::InvalidDatum)?;
 
 		match datum {
 			RegisterValidatorDatum::V0 {
