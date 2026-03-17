@@ -323,9 +323,96 @@ pub mod pallet {
 				return Ok(());
 			};
 
-			let parsed = Self::get_data_from_inherent_data(data).ok_or(InherentError::Other)?;
-			if parsed.utxos != *utxos || parsed.next_cardano_position != *next_cardano_position {
-				return Err(InherentError::Other);
+			let parsed =
+				Self::get_data_from_inherent_data(data).ok_or(InherentError::MalformedInherent)?;
+
+			if parsed.utxos != *utxos {
+				let expected_count = u32::try_from(parsed.utxos.len()).unwrap_or(u32::MAX);
+				let actual_count = u32::try_from(utxos.len()).unwrap_or(u32::MAX);
+
+				if let Some(index) = parsed
+					.utxos
+					.iter()
+					.zip(utxos.iter())
+					.position(|(expected, actual)| expected != actual)
+				{
+					let expected = &parsed.utxos[index];
+					let actual = &utxos[index];
+					log::warn!(
+						"cNIGHT inherent UTxO mismatch at index {}: expected_header={} actual_header={} expected_data={:?} actual_data={:?} expected_count={} actual_count={}",
+						index,
+						expected.header,
+						actual.header,
+						expected.data,
+						actual.data,
+						parsed.utxos.len(),
+						utxos.len(),
+					);
+					return Err(InherentError::UTxOMismatch {
+						index: Some(u32::try_from(index).unwrap_or(u32::MAX)),
+						expected: Box::new(Some(expected.clone())),
+						actual: Box::new(Some(actual.clone())),
+						expected_count,
+						actual_count,
+					});
+				} else if let Some(extra) = parsed.utxos.get(utxos.len()) {
+					log::warn!(
+						"cNIGHT inherent UTxO mismatch: verifier has extra UTxO at index {}: header={} data={:?} expected_count={} actual_count={}",
+						utxos.len(),
+						extra.header,
+						extra.data,
+						parsed.utxos.len(),
+						utxos.len(),
+					);
+					return Err(InherentError::UTxOMismatch {
+						index: Some(u32::try_from(utxos.len()).unwrap_or(u32::MAX)),
+						expected: Box::new(Some(extra.clone())),
+						actual: Box::new(None),
+						expected_count,
+						actual_count,
+					});
+				} else if let Some(extra) = utxos.get(parsed.utxos.len()) {
+					log::warn!(
+						"cNIGHT inherent UTxO mismatch: block has extra UTxO at index {}: header={} data={:?} expected_count={} actual_count={}",
+						parsed.utxos.len(),
+						extra.header,
+						extra.data,
+						parsed.utxos.len(),
+						utxos.len(),
+					);
+					return Err(InherentError::UTxOMismatch {
+						index: Some(u32::try_from(parsed.utxos.len()).unwrap_or(u32::MAX)),
+						expected: Box::new(None),
+						actual: Box::new(Some(extra.clone())),
+						expected_count,
+						actual_count,
+					});
+				} else {
+					log::warn!(
+						"cNIGHT inherent UTxO mismatch with no differing index found: expected_count={} actual_count={}",
+						parsed.utxos.len(),
+						utxos.len(),
+					);
+					return Err(InherentError::UTxOMismatch {
+						index: None,
+						expected: Box::new(None),
+						actual: Box::new(None),
+						expected_count,
+						actual_count,
+					});
+				}
+			}
+
+			if parsed.next_cardano_position != *next_cardano_position {
+				log::warn!(
+					"cNIGHT inherent position mismatch: expected={} actual={}",
+					parsed.next_cardano_position,
+					next_cardano_position,
+				);
+				return Err(InherentError::PositionMismatch {
+					expected: parsed.next_cardano_position,
+					actual: next_cardano_position.clone(),
+				});
 			}
 			Ok(())
 		}

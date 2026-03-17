@@ -27,10 +27,11 @@ pub async fn get_permissioned_candidates(
 	if response.datum.is_empty() {
 		Ok(None)
 	} else {
-		let datums = PermissionedCandidateDatums::try_from(PlutusData::new_bytes(response.datum))
-			.map_err(|e| {
-			Status::internal(format!("failed to decode Ariadne parameters: {e}"))
-		})?;
+		let datums =
+			PermissionedCandidateDatums::try_from(PlutusData::from_bytes(response.datum).map_err(
+				|e| Status::internal(format!("failed to parse Ariadne parameters datum: {e}")),
+			)?)
+			.map_err(|e| Status::internal(format!("failed to decode Ariadne parameters: {e}")))?;
 
 		Ok(Some(datums.into()))
 	}

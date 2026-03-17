@@ -1,6 +1,7 @@
 use authority_selection_inherents::{AriadneParameters, AuthoritySelectionDataSource};
 use sidechain_domain::{
 	CandidateRegistrations, DParameter, EpochNonce, MainchainAddress, McEpochNumber, PolicyId,
+	offset_data_epoch,
 };
 use tonic::transport::{Channel, Endpoint};
 
@@ -47,6 +48,7 @@ impl AuthoritySelectionDataSource for AuthoritySelectionDataSourceGrpcImpl {
 		_permissioned_candidate_policy: PolicyId,
 	) -> Result<AriadneParameters, Box<dyn std::error::Error + Send + Sync>> {
 		let mut client = self.client.clone();
+		let query_epoch = authority_selection_query_epoch(epoch)?;
 
 		// DParameter is now read from pallet_system_parameters storage, not from mainchain.
 		// This hardcoded value is unused - the actual d_parameter comes from the runtime.
@@ -55,7 +57,7 @@ impl AuthoritySelectionDataSource for AuthoritySelectionDataSourceGrpcImpl {
 				num_permissioned_candidates: 0,
 				num_registered_candidates: 0,
 			},
-			permissioned_candidates: get_permissioned_candidates(&mut client, epoch)
+			permissioned_candidates: get_permissioned_candidates(&mut client, query_epoch)
 				.await
 				.map_err(AcropolisCNightObservationDataSourceError::GRPCQueryError)?,
 		})
@@ -67,8 +69,9 @@ impl AuthoritySelectionDataSource for AuthoritySelectionDataSourceGrpcImpl {
 		_committee_candidate_address: MainchainAddress,
 	) -> Result<Vec<CandidateRegistrations>, Box<dyn std::error::Error + Send + Sync>> {
 		let mut client = self.client.clone();
+		let query_epoch = authority_selection_query_epoch(epoch)?;
 
-		get_candidates(&mut client, epoch).await.map_err(grpc_err)
+		get_candidates(&mut client, query_epoch).await.map_err(grpc_err)
 	}
 
 	async fn get_epoch_nonce(
@@ -76,18 +79,30 @@ impl AuthoritySelectionDataSource for AuthoritySelectionDataSourceGrpcImpl {
 		epoch: McEpochNumber,
 	) -> Result<Option<EpochNonce>, Box<dyn std::error::Error + Send + Sync>> {
 		let mut client = self.client.clone();
+		let query_epoch = authority_selection_query_epoch(epoch)?;
 
-		get_epoch_nonce(&mut client, epoch).await.map_err(grpc_err)
+		get_epoch_nonce(&mut client, query_epoch).await.map_err(grpc_err)
 	}
 
 	async fn data_epoch(
 		&self,
 		for_epoch: McEpochNumber,
 	) -> Result<McEpochNumber, Box<dyn std::error::Error + Send + Sync>> {
-		Ok(for_epoch)
+		authority_selection_query_epoch(for_epoch)
 	}
 }
 
 fn grpc_err(e: tonic::Status) -> Box<dyn std::error::Error + Send + Sync> {
 	Box::new(AcropolisCNightObservationDataSourceError::GRPCQueryError(e))
+}
+
+fn authority_selection_query_epoch(
+	for_epoch: McEpochNumber,
+) -> Result<McEpochNumber, Box<dyn std::error::Error + Send + Sync>> {
+	offset_data_epoch(&for_epoch).map_err(|offset| {
+		format!(
+			"Cannot derive authority-selection data epoch for {for_epoch}; expected at least offset {offset}"
+		)
+		.into()
+	})
 }

@@ -127,6 +127,15 @@ impl MidnightCNightObservationInherentDataProvider {
 			.await
 			.map_err(IDPCreationError::DataSourceError)?;
 
+		log::debug!(
+			"Built cNIGHT inherent: start={} end={} utxo_count={} first_utxo={:?} last_utxo={:?}",
+			cardano_position_start,
+			observed_utxos.end,
+			observed_utxos.utxos.len(),
+			observed_utxos.utxos.first().map(|utxo| &utxo.header),
+			observed_utxos.utxos.last().map(|utxo| &utxo.header),
+		);
+
 		Ok(Self { utxos: observed_utxos.utxos, next_cardano_position: observed_utxos.end })
 	}
 }
