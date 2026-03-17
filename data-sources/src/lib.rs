@@ -1,5 +1,6 @@
 mod grpc;
 mod sources;
+mod tests;
 pub use grpc::client::MidnightGrpcClient;
 pub use sources::{
 	authority_selection::grpc::AuthoritySelectionDataSourceGrpcImpl,
