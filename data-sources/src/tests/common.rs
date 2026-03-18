@@ -3,7 +3,7 @@ use std::{error::Error, fmt, str::FromStr, time::Duration};
 pub const CNIGHT_OBSERVATION_POOL_CFG: DbPoolCfg =
 	DbPoolCfg { acquire_timeout: Duration::from_secs(30), max_connections: 10 };
 
-pub const _STANDARD_POOL_CFG: DbPoolCfg =
+pub const STANDARD_POOL_CFG: DbPoolCfg =
 	DbPoolCfg { acquire_timeout: Duration::from_secs(30), max_connections: 5 };
 
 pub async fn get_connection(
