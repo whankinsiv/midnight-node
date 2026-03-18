@@ -21,17 +21,21 @@ async fn test_grpc_datasources_against_db_sync() {
 
 	test_grpc_cnight_observation_against_db_sync(&postgres_uri, &grpc_endpoint)
 		.await
-		.unwrap();
+		.unwrap_or_else(|e| panic!("cnight observation test failed: {e:?}"));
+
 	test_grpc_authority_selection_against_db_sync(&postgres_uri, &grpc_endpoint)
 		.await
-		.unwrap();
+		.unwrap_or_else(|e| panic!("authority selection test failed: {e:?}"));
+
 	test_grpc_federated_authority_against_db_sync(&postgres_uri, &grpc_endpoint)
 		.await
-		.unwrap();
+		.unwrap_or_else(|e| panic!("federated authority test failed: {e:?}"));
+
 	test_grpc_mc_hash_grpc_against_db_sync(&postgres_uri, &grpc_endpoint)
 		.await
-		.unwrap();
+		.unwrap_or_else(|e| panic!("mc hash test failed: {e:?}"));
+
 	test_grpc_sidechain_rpc_against_db_sync(&postgres_uri, &grpc_endpoint)
 		.await
-		.unwrap();
+		.unwrap_or_else(|e| panic!("sidechain rpc test failed: {e:?}"));
 }
