@@ -10,9 +10,13 @@ use crate::grpc::midnight_state::{
 pub(crate) async fn get_latest_stable_block(
 	client: &mut MidnightStateClient<Channel>,
 	offset: u32,
+	reference_timestamp_unix_millis: u64,
 ) -> Result<Option<MainchainBlock>, Status> {
 	let response = client
-		.get_latest_stable_block(LatestStableBlockRequest { offset })
+		.get_latest_stable_block(LatestStableBlockRequest {
+			offset,
+			reference_timestamp_unix_millis: Some(reference_timestamp_unix_millis),
+		})
 		.await?
 		.into_inner();
 
@@ -33,9 +37,14 @@ pub(crate) async fn get_stable_block(
 	client: &mut MidnightStateClient<Channel>,
 	hash: McBlockHash,
 	offset: u32,
+	reference_timestamp_unix_millis: u64,
 ) -> Result<Option<MainchainBlock>, Status> {
 	let response = client
-		.get_stable_block(StableBlockRequest { block_hash: hash.0.to_vec(), offset })
+		.get_stable_block(StableBlockRequest {
+			block_hash: hash.0.to_vec(),
+			offset,
+			reference_timestamp_unix_millis: Some(reference_timestamp_unix_millis),
+		})
 		.await?
 		.into_inner();
 

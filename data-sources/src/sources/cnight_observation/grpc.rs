@@ -7,7 +7,10 @@ use sidechain_domain::McBlockHash;
 use tonic::transport::{Channel, Endpoint};
 
 use crate::{
-	grpc::{midnight_state::midnight_state_client::MidnightStateClient, requests::cnight_observation_acropolis::{get_position_by_hash, get_utxo_events}},
+	grpc::{
+		midnight_state::midnight_state_client::MidnightStateClient,
+		requests::cnight_observation_acropolis::{get_position_by_hash, get_utxo_events},
+	},
 	sources::AcropolisDataSourceError,
 };
 
@@ -58,22 +61,21 @@ impl MidnightCNightObservationDataSource for MidnightCNightObservationGrpcImpl {
 
 		let mut client = self.client.clone();
 
-		let mut utxos = get_utxo_events(
+		let utxos = get_utxo_events(
 			&mut client,
 			cardano_network,
 			start_position.block_number,
 			start_position.tx_index_in_block,
-			tx_capacity - 1,
+			tx_capacity,
+			Some(current_tip.clone()),
 		)
 		.await
 		.map_err(AcropolisDataSourceError::GRPCQueryError)?;
 
-		utxos.sort();
-
 		let tx_count = count_distinct_transactions(&utxos);
 
 		let start = start_position.clone();
-		let end = if tx_count < tx_capacity - 1 {
+		let end = if tx_count < tx_capacity {
 			let end = get_position_by_hash(&mut client, current_tip.clone())
 				.await
 				.map_err(|_| AcropolisDataSourceError::MissingBlockReference(current_tip))?;
