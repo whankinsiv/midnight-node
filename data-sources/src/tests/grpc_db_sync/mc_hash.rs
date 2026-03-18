@@ -28,15 +28,11 @@ const DEFAULT_BLOCK_TIMESTAMP: Timestamp = Timestamp::new(0);
 pub async fn test_grpc_mc_hash_grpc_against_db_sync(
 	postgres_uri: &str,
 	grpc_endpoint: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 	let block_source_config = load_block_source_config();
 
-	let db_sync = create_dbsync_mc_hash_source(postgres_uri, block_source_config.clone())
-		.await
-		.expect("db-sync init failed");
-	let grpc = McHashDataSourceGrpcImpl::connect(&grpc_endpoint, block_source_config)
-		.await
-		.expect("grpc init failed");
+	let db_sync = create_dbsync_mc_hash_source(postgres_uri, block_source_config.clone()).await?;
+	let grpc = McHashDataSourceGrpcImpl::connect(&grpc_endpoint, block_source_config).await?;
 
 	test_block_by_hash_match(&db_sync, &grpc).await?;
 	test_get_stable_block_from_timestamp(&db_sync, &grpc).await?;
@@ -47,15 +43,9 @@ pub async fn test_grpc_mc_hash_grpc_against_db_sync(
 async fn test_block_by_hash_match(
 	db_sync: &McHashDataSourceImpl,
 	grpc: &McHashDataSourceGrpcImpl,
-) -> Result<(), Box<dyn std::error::Error>> {
-	let db_block_info = db_sync
-		.get_block_by_hash(DEFAULT_BLOCK_HASH)
-		.await
-		.expect("failed to get db-sync block by hash");
-	let grpc_block_info = grpc
-		.get_block_by_hash(DEFAULT_BLOCK_HASH)
-		.await
-		.expect("failed to get grpc block by hash");
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+	let db_block_info = db_sync.get_block_by_hash(DEFAULT_BLOCK_HASH).await?;
+	let grpc_block_info = grpc.get_block_by_hash(DEFAULT_BLOCK_HASH).await?;
 
 	assert_eq!(db_block_info, grpc_block_info, "block by hash mismatch");
 
@@ -65,15 +55,9 @@ async fn test_block_by_hash_match(
 async fn test_get_stable_block_from_timestamp(
 	db_sync: &McHashDataSourceImpl,
 	grpc: &McHashDataSourceGrpcImpl,
-) -> Result<(), Box<dyn std::error::Error>> {
-	let db_block_info = db_sync
-		.get_latest_stable_block_for(DEFAULT_BLOCK_TIMESTAMP)
-		.await
-		.expect("failed to get db-sync block by timestamp");
-	let grpc_block_info = grpc
-		.get_latest_stable_block_for(DEFAULT_BLOCK_TIMESTAMP)
-		.await
-		.expect("failed to get grpc block by timestamp");
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+	let db_block_info = db_sync.get_latest_stable_block_for(DEFAULT_BLOCK_TIMESTAMP).await?;
+	let grpc_block_info = grpc.get_latest_stable_block_for(DEFAULT_BLOCK_TIMESTAMP).await?;
 
 	assert_eq!(db_block_info, grpc_block_info, "block by timestamp mismatch");
 
@@ -83,15 +67,12 @@ async fn test_get_stable_block_from_timestamp(
 async fn test_get_stable_block_from_hash(
 	db_sync: &McHashDataSourceImpl,
 	grpc: &McHashDataSourceGrpcImpl,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 	let db_block_info = db_sync
 		.get_stable_block_for(DEFAULT_BLOCK_HASH, DEFAULT_BLOCK_TIMESTAMP)
-		.await
-		.expect("failed to get db-sync stable block by hash");
-	let grpc_block_info = grpc
-		.get_stable_block_for(DEFAULT_BLOCK_HASH, DEFAULT_BLOCK_TIMESTAMP)
-		.await
-		.expect("failed to get grpc stable block by hash");
+		.await?;
+	let grpc_block_info =
+		grpc.get_stable_block_for(DEFAULT_BLOCK_HASH, DEFAULT_BLOCK_TIMESTAMP).await?;
 
 	assert_eq!(db_block_info, grpc_block_info, "stable block by hash mismatch");
 

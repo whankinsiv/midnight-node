@@ -59,24 +59,16 @@ const DEFAULT_TECHNICAL_COMMITEE_POLICY_ID: PolicyId = PolicyId([
 pub async fn test_grpc_federated_authority_against_db_sync(
 	postgres_uri: &str,
 	grpc_endpoint: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 	let config = load_federated_authority_config();
 
-	let db_sync = create_dbsync_federated_authority_source(postgres_uri)
-		.await
-		.expect("db-sync init failed");
-	let grpc = FederatedAuthorityObservationGrpcImpl::connect(&grpc_endpoint)
-		.await
-		.expect("grpc init failed");
+	let db_sync = create_dbsync_federated_authority_source(postgres_uri).await?;
+	let grpc = FederatedAuthorityObservationGrpcImpl::connect(&grpc_endpoint).await?;
 
-	let db_federated_data = db_sync
-		.get_federated_authority_data(&config, &DEFAULT_BLOCK_HASH)
-		.await
-		.expect("failed to get db-sync federated authority data");
-	let grpc_federated_data = grpc
-		.get_federated_authority_data(&config, &DEFAULT_BLOCK_HASH)
-		.await
-		.expect("failed to get grpc federated authority data");
+	let db_federated_data =
+		db_sync.get_federated_authority_data(&config, &DEFAULT_BLOCK_HASH).await?;
+	let grpc_federated_data =
+		grpc.get_federated_authority_data(&config, &DEFAULT_BLOCK_HASH).await?;
 
 	assert_eq!(
 		db_federated_data.council_authorities, grpc_federated_data.council_authorities,

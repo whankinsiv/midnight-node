@@ -24,8 +24,8 @@ const DEFAULT_TX_CAPACITY: usize = 200;
 pub async fn test_grpc_cnight_observation_against_db_sync(
 	postgres_uri: &str,
 	grpc_endpoint: &String,
-) -> Result<(), Box<dyn std::error::Error>> {
-	let config = load_cnight_config().expect("failed to load cNIGHT config");
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+	let config = load_cnight_config()?;
 	let start_position = CardanoPosition {
 		block_hash: McBlockHash([0; 32]),
 		block_number: 0,
@@ -37,27 +37,22 @@ pub async fn test_grpc_cnight_observation_against_db_sync(
 		.and_then(|value| value.parse::<usize>().ok())
 		.unwrap_or(DEFAULT_TX_CAPACITY);
 
-	let db = create_dbsync_cnight_observation_source(postgres_uri)
-		.await
-		.expect("db-sync init failed");
-	let grpc = MidnightCNightObservationGrpcImpl::connect(&grpc_endpoint)
-		.await
-		.expect("grpc init failed");
-	let current_tip = McBlockHash(
-		hex::decode("38d7fd275538e995454888c58137fd39cbf454bb2736feb2d81021964029cb93")
-			.expect("invalid hex")
-			.try_into()
-			.expect("wrong length"),
-	);
+	let db = create_dbsync_cnight_observation_source(postgres_uri).await?;
+	let grpc = MidnightCNightObservationGrpcImpl::connect(&grpc_endpoint).await?;
+
+	let tip_raw = hex::decode("38d7fd275538e995454888c58137fd39cbf454bb2736feb2d81021964029cb93")?;
+	let tip_bytes: [u8; 32] = tip_raw
+		.as_slice()
+		.try_into()
+		.map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })?;
+	let current_tip = McBlockHash(tip_bytes);
 
 	let db_utxos = db
 		.get_utxos_up_to_capacity(&config, &start_position, current_tip.clone(), tx_capacity)
-		.await
-		.expect("failed to get db-sync utxos");
+		.await?;
 	let grpc_utxos = grpc
 		.get_utxos_up_to_capacity(&config, &start_position, current_tip, tx_capacity)
-		.await
-		.expect("failed to get grpc utxos");
+		.await?;
 
 	assert_eq!(db_utxos.start, grpc_utxos.start, "start_position mismatch");
 
