@@ -21,7 +21,7 @@ const DEFAULT_CNIGHT_ASSET_NAME: &str = "";
 
 const DEFAULT_TX_CAPACITY: usize = 200;
 
-pub async fn test_cnight_observation_match(
+pub async fn test_grpc_cnight_observation_against_db_sync(
 	postgres_uri: &str,
 	grpc_endpoint: &String,
 ) -> Result<(), Box<dyn std::error::Error>> {

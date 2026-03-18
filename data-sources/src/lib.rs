@@ -9,13 +9,4 @@ pub use sources::{
 };
 
 #[cfg(test)]
-mod tests {
-	mod integration;
-
-	mod authority_selection;
-	mod cnight_observation;
-	mod common;
-	mod federated_authority;
-	mod mc_hash;
-	mod sidechain_rpc;
-}
+mod tests;
