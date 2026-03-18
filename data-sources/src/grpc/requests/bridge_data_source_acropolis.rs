@@ -11,18 +11,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use cardano_serialization_lib::PlutusData;
-use partner_chains_plutus_data::bridge::{TokenTransferDatum, TokenTransferDatumV1};
-use sidechain_domain::{McBlockHash, McBlockNumber, McTxHash, UtxoId, UtxoIndex};
+use sidechain_domain::{McBlockHash, McBlockNumber};
 use sp_partner_chains_bridge::{BridgeDataCheckpoint, BridgeTransferV1};
 use tonic::{Status, transport::Channel};
 
 use crate::grpc::{
-	conversions::hash32,
+	conversions::{
+		bridge_checkpoint_from_proto, bridge_checkpoint_to_proto, bridge_utxo_to_transfer,
+	},
 	midnight_state::{
-		BlockByHashRequest, BridgeCheckpoint, BridgeUtxo, BridgeUtxosRequest,
-		UtxoId as UtxoIdProto, bridge_checkpoint, bridge_utxos_request,
-		midnight_state_client::MidnightStateClient,
+		BlockByHashRequest, BridgeUtxosRequest, midnight_state_client::MidnightStateClient,
 	},
 };
 
@@ -39,7 +37,7 @@ where
 
 	let response = client
 		.get_bridge_utxos(BridgeUtxosRequest {
-			checkpoint: Some(checkpoint_to_proto(data_checkpoint)?),
+			checkpoint: Some(bridge_checkpoint_to_proto(data_checkpoint)?),
 			to_block: u64::from(to_block.0),
 			utxo_capacity: max_transfers,
 		})
@@ -55,7 +53,7 @@ where
 		.flatten()
 		.collect();
 
-	let next_checkpoint = checkpoint_from_proto(
+	let next_checkpoint = bridge_checkpoint_from_proto(
 		response
 			.next_checkpoint
 			.ok_or_else(|| Status::internal("BridgeUtxosResponse missing next_checkpoint"))?,
@@ -74,84 +72,4 @@ async fn get_block_number_by_hash(
 		.into_inner();
 
 	Ok(McBlockNumber(response.block_number))
-}
-
-#[allow(clippy::result_large_err)]
-fn checkpoint_to_proto(
-	checkpoint: BridgeDataCheckpoint,
-) -> Result<bridge_utxos_request::Checkpoint, Status> {
-	match checkpoint {
-		BridgeDataCheckpoint::Block(block_number) => {
-			Ok(bridge_utxos_request::Checkpoint::BlockNumber(u64::from(block_number.0)))
-		},
-		BridgeDataCheckpoint::Utxo(utxo) => {
-			Ok(bridge_utxos_request::Checkpoint::Utxo(UtxoIdProto {
-				tx_hash: utxo.tx_hash.0.to_vec(),
-				index: u32::from(utxo.index.0),
-			}))
-		},
-	}
-}
-
-#[allow(clippy::result_large_err)]
-fn checkpoint_from_proto(checkpoint: BridgeCheckpoint) -> Result<BridgeDataCheckpoint, Status> {
-	match checkpoint.kind {
-		Some(bridge_checkpoint::Kind::BlockNumber(block_number)) => {
-			let block_number = u32::try_from(block_number)
-				.map_err(|_| Status::internal("bridge checkpoint block number overflow"))?;
-			Ok(BridgeDataCheckpoint::Block(McBlockNumber(block_number)))
-		},
-		Some(bridge_checkpoint::Kind::Utxo(utxo)) => Ok(BridgeDataCheckpoint::Utxo(utxo_id(utxo)?)),
-		None => Err(Status::internal("BridgeCheckpoint missing kind")),
-	}
-}
-
-#[allow(clippy::result_large_err)]
-fn bridge_utxo_to_transfer<RecipientAddress>(
-	utxo: BridgeUtxo,
-) -> Result<Option<BridgeTransferV1<RecipientAddress>>, Status>
-where
-	RecipientAddress: for<'a> TryFrom<&'a [u8]>,
-{
-	let Some(token_amount) = utxo.tokens_out.checked_sub(utxo.tokens_in) else {
-		return Ok(None);
-	};
-
-	if token_amount == 0 {
-		return Ok(None);
-	}
-
-	let utxo_id = utxo_id(UtxoIdProto { tx_hash: utxo.tx_hash.clone(), index: utxo.output_index })?;
-
-	let Some(datum_bytes) = utxo.datum else {
-		return Ok(Some(BridgeTransferV1::InvalidTransfer { token_amount, utxo_id }));
-	};
-
-	let datum = match PlutusData::from_bytes(datum_bytes) {
-		Ok(datum) => datum,
-		Err(_) => return Ok(Some(BridgeTransferV1::InvalidTransfer { token_amount, utxo_id })),
-	};
-
-	let transfer = match TokenTransferDatum::try_from(datum) {
-		Ok(TokenTransferDatum::V1(TokenTransferDatumV1::UserTransfer { receiver })) => {
-			match RecipientAddress::try_from(receiver.0.as_ref()) {
-				Ok(recipient) => BridgeTransferV1::UserTransfer { token_amount, recipient },
-				Err(_) => BridgeTransferV1::InvalidTransfer { token_amount, utxo_id },
-			}
-		},
-		Ok(TokenTransferDatum::V1(TokenTransferDatumV1::ReserveTransfer)) => {
-			BridgeTransferV1::ReserveTransfer { token_amount }
-		},
-		Err(_) => BridgeTransferV1::InvalidTransfer { token_amount, utxo_id },
-	};
-
-	Ok(Some(transfer))
-}
-
-#[allow(clippy::result_large_err)]
-fn utxo_id(utxo: UtxoIdProto) -> Result<UtxoId, Status> {
-	let index =
-		u16::try_from(utxo.index).map_err(|_| Status::internal("bridge utxo index overflow"))?;
-
-	Ok(UtxoId { tx_hash: McTxHash(hash32(utxo.tx_hash)?), index: UtxoIndex(index) })
 }

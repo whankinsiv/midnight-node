@@ -39,7 +39,6 @@ prost = { version = "0.13", optional = true }
 
 [build-dependencies]
 tonic-build = "0.12"
-protoc-bin-vendored = "3"
 
 [dev-dependencies]
 tokio = { workspace = true }

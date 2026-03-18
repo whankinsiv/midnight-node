@@ -10,16 +10,19 @@ use midnight_primitives_federated_authority_observation::{
 	AuthorityMemberPublicKey, GovernanceAuthorityDatumR0, GovernanceAuthorityDatums,
 };
 use midnight_primitives_mainchain_follower::data_source::cnight_observation::RegistrationDatumDecodeError;
+use partner_chains_plutus_data::bridge::{TokenTransferDatum, TokenTransferDatumV1};
 use partner_chains_plutus_data::registered_candidates::RegisterValidatorDatum;
 use sidechain_domain::{
 	CandidateKeys, CrossChainPublicKey, CrossChainSignature, MainchainKeyHash, McBlockHash,
 	McTxHash, PolicyId, StakeDelegation, StakePoolPublicKey, UtxoId, UtxoIndex, UtxoInfo,
 };
+use sp_partner_chains_bridge::{BridgeDataCheckpoint, BridgeTransferV1};
 use std::{collections::HashMap, convert::TryFrom};
 use tonic::Status;
 
 use crate::grpc::midnight_state::{
-	EpochCandidate, StakePoolEntry, UtxoEvent, UtxoId as UtxoIdProto, utxo_event::Kind,
+	BridgeCheckpoint, BridgeUtxo, EpochCandidate, StakePoolEntry, UtxoEvent, UtxoId as UtxoIdProto,
+	bridge_checkpoint, bridge_utxos_request, utxo_event::Kind,
 };
 
 #[derive(Debug)]
@@ -28,6 +31,93 @@ pub enum CandidateConversionError {
 	InvalidDatum,
 	InvalidHashLength,
 	InvalidIndex,
+}
+
+#[allow(clippy::result_large_err)]
+pub fn bridge_checkpoint_to_proto(
+	checkpoint: BridgeDataCheckpoint,
+) -> Result<bridge_utxos_request::Checkpoint, Status> {
+	match checkpoint {
+		BridgeDataCheckpoint::Block(block_number) => {
+			Ok(bridge_utxos_request::Checkpoint::BlockNumber(u64::from(block_number.0)))
+		},
+		BridgeDataCheckpoint::Utxo(utxo) => {
+			Ok(bridge_utxos_request::Checkpoint::Utxo(UtxoIdProto {
+				tx_hash: utxo.tx_hash.0.to_vec(),
+				index: u32::from(utxo.index.0),
+			}))
+		},
+	}
+}
+
+#[allow(clippy::result_large_err)]
+pub fn bridge_checkpoint_from_proto(
+	checkpoint: BridgeCheckpoint,
+) -> Result<BridgeDataCheckpoint, Status> {
+	match checkpoint.kind {
+		Some(bridge_checkpoint::Kind::BlockNumber(block_number)) => {
+			let block_number = u32::try_from(block_number)
+				.map_err(|_| Status::internal("bridge checkpoint block number overflow"))?;
+			Ok(BridgeDataCheckpoint::Block(sidechain_domain::McBlockNumber(block_number)))
+		},
+		Some(bridge_checkpoint::Kind::Utxo(utxo)) => {
+			Ok(BridgeDataCheckpoint::Utxo(bridge_utxo_id_from_proto(utxo)?))
+		},
+		None => Err(Status::internal("BridgeCheckpoint missing kind")),
+	}
+}
+
+#[allow(clippy::result_large_err)]
+pub fn bridge_utxo_to_transfer<RecipientAddress>(
+	utxo: BridgeUtxo,
+) -> Result<Option<BridgeTransferV1<RecipientAddress>>, Status>
+where
+	RecipientAddress: for<'a> TryFrom<&'a [u8]>,
+{
+	let Some(token_amount) = utxo.tokens_out.checked_sub(utxo.tokens_in) else {
+		return Ok(None);
+	};
+
+	if token_amount == 0 {
+		return Ok(None);
+	}
+
+	let utxo_id = bridge_utxo_id_from_proto(UtxoIdProto {
+		tx_hash: utxo.tx_hash.clone(),
+		index: utxo.output_index,
+	})?;
+
+	let Some(datum_bytes) = utxo.datum else {
+		return Ok(Some(BridgeTransferV1::InvalidTransfer { token_amount, utxo_id }));
+	};
+
+	let datum = match PlutusData::from_bytes(datum_bytes) {
+		Ok(datum) => datum,
+		Err(_) => return Ok(Some(BridgeTransferV1::InvalidTransfer { token_amount, utxo_id })),
+	};
+
+	let transfer = match TokenTransferDatum::try_from(datum) {
+		Ok(TokenTransferDatum::V1(TokenTransferDatumV1::UserTransfer { receiver })) => {
+			match RecipientAddress::try_from(receiver.0.as_ref()) {
+				Ok(recipient) => BridgeTransferV1::UserTransfer { token_amount, recipient },
+				Err(_) => BridgeTransferV1::InvalidTransfer { token_amount, utxo_id },
+			}
+		},
+		Ok(TokenTransferDatum::V1(TokenTransferDatumV1::ReserveTransfer)) => {
+			BridgeTransferV1::ReserveTransfer { token_amount }
+		},
+		Err(_) => BridgeTransferV1::InvalidTransfer { token_amount, utxo_id },
+	};
+
+	Ok(Some(transfer))
+}
+
+#[allow(clippy::result_large_err)]
+pub fn bridge_utxo_id_from_proto(utxo: UtxoIdProto) -> Result<UtxoId, Status> {
+	let index =
+		u16::try_from(utxo.index).map_err(|_| Status::internal("bridge utxo index overflow"))?;
+
+	Ok(UtxoId { tx_hash: McTxHash(hash32(utxo.tx_hash)?), index: UtxoIndex(index) })
 }
 
 #[allow(clippy::result_large_err)]
