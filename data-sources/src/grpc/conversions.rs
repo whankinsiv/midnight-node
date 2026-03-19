@@ -43,7 +43,7 @@ pub fn observed_utxo_from_event(
 				tx_position: CardanoPosition {
 					block_hash: McBlockHash(hash32(e.block_hash)?),
 					block_number: e.block_number as u32,
-					block_timestamp: TimestampUnixMillis(e.block_timestamp_unix * 1000),
+					block_timestamp: TimestampUnixMillis(e.block_timestamp_unix),
 					tx_index_in_block: e.tx_index,
 				},
 				tx_hash: McTxHash(hash32(e.tx_hash.clone())?),
@@ -63,7 +63,7 @@ pub fn observed_utxo_from_event(
 						.tx_hash
 						.try_into()
 						.map_err(|_| tonic::Status::internal("Invalid tx hash length"))?,
-					utxo_tx_index: e.tx_index as u16,
+					utxo_tx_index: e.output_index as u16,
 				}),
 			})
 		},
@@ -73,7 +73,7 @@ pub fn observed_utxo_from_event(
 				tx_position: CardanoPosition {
 					block_hash: McBlockHash(hash32(e.block_hash)?),
 					block_number: e.block_number as u32,
-					block_timestamp: TimestampUnixMillis(e.block_timestamp_unix * 1000),
+					block_timestamp: TimestampUnixMillis(e.block_timestamp_unix),
 					tx_index_in_block: e.tx_index,
 				},
 				tx_hash: McTxHash(hash32(e.spending_tx_hash.clone())?),
@@ -147,7 +147,7 @@ pub fn observed_utxo_from_event(
 					tx_index_in_block: e.tx_index,
 				},
 				tx_hash: McTxHash(hash32(e.tx_hash.clone())?),
-				utxo_tx_hash: McTxHash(hash32(e.tx_hash)?),
+				utxo_tx_hash: McTxHash(hash32(e.utxo_tx_hash)?),
 				utxo_index: UtxoIndexInTx(e.utxo_index as u16),
 			};
 
