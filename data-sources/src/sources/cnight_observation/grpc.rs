@@ -62,8 +62,7 @@ impl MidnightCNightObservationDataSource for MidnightCNightObservationGrpcImpl {
 		let response = get_utxo_events(
 			&mut client,
 			cardano_network,
-			start_position.block_number,
-			start_position.tx_index_in_block,
+			start_position,
 			tx_capacity,
 			current_tip,
 		)

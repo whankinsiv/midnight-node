@@ -16,8 +16,7 @@ pub struct ObservedUtxoEvents {
 pub async fn get_utxo_events(
 	client: &mut MidnightStateClient<Channel>,
 	cardano_network: u8,
-	start_block: u32,
-	start_tx_index: u32,
+	start_position: &CardanoPosition,
 	tx_capacity: usize,
 	end_block_hash: McBlockHash,
 ) -> Result<ObservedUtxoEvents, Status> {
@@ -26,10 +25,16 @@ pub async fn get_utxo_events(
 
 	let response = client
 		.get_utxo_events(UtxoEventsRequest {
-			start_block,
-			start_tx_index,
+			start_block: start_position.block_number,
+			start_tx_index: start_position.tx_index_in_block,
 			tx_capacity,
 			end_block_hash: end_block_hash.0.to_vec(),
+			start_position: Some(GrpcCardanoPosition {
+				block_hash: start_position.block_hash.0.to_vec(),
+				block_number: start_position.block_number,
+				tx_index: start_position.tx_index_in_block,
+				block_timestamp_unix_millis: start_position.block_timestamp.0,
+			}),
 		})
 		.await?
 		.into_inner();
