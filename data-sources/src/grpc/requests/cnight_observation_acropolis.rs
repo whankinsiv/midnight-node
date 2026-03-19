@@ -19,7 +19,7 @@ pub async fn get_utxo_events(
 	start_block: u32,
 	start_tx_index: u32,
 	tx_capacity: usize,
-	end_block_hash: Option<McBlockHash>,
+	end_block_hash: McBlockHash,
 ) -> Result<ObservedUtxoEvents, Status> {
 	let tx_capacity = u32::try_from(tx_capacity)
 		.map_err(|_| tonic::Status::invalid_argument("utxo_capacity too large"))?;
@@ -29,7 +29,7 @@ pub async fn get_utxo_events(
 			start_block,
 			start_tx_index,
 			tx_capacity,
-			end_block_hash: end_block_hash.map(|hash| hash.0.to_vec()),
+			end_block_hash: end_block_hash.0.to_vec(),
 		})
 		.await?
 		.into_inner();

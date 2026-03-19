@@ -65,7 +65,7 @@ impl MidnightCNightObservationDataSource for MidnightCNightObservationGrpcImpl {
 			start_position.block_number,
 			start_position.tx_index_in_block,
 			tx_capacity,
-			Some(current_tip.clone()),
+			current_tip,
 		)
 		.await
 		.map_err(AcropolisDataSourceError::GRPCQueryError)?;
