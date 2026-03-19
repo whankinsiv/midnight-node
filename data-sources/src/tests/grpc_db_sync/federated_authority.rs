@@ -4,7 +4,7 @@ use crate::{
 	FederatedAuthorityObservationGrpcImpl,
 	tests::{
 		common::{STANDARD_POOL_CFG, get_connection},
-		configuration::{IntegrationTestConfig, ParamsConfig},
+		configuration::IntegrationTestConfig,
 	},
 };
 use midnight_primitives_mainchain_follower::{
@@ -13,16 +13,16 @@ use midnight_primitives_mainchain_follower::{
 
 pub async fn test_grpc_federated_authority_against_db_sync(
 	config: &IntegrationTestConfig,
-	params: &ParamsConfig,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 	let db_sync = create_dbsync_federated_authority_source(&config.postgres_uri).await?;
 	let grpc = FederatedAuthorityObservationGrpcImpl::connect(&config.grpc_endpoint).await?;
 
 	assert_eq!(
 		db_sync
-			.get_federated_authority_data(&config.authority_config, &params.tip)
+			.get_federated_authority_data(&config.authority_config, &config.params_config.tip)
 			.await?,
-		grpc.get_federated_authority_data(&config.authority_config, &params.tip).await?,
+		grpc.get_federated_authority_data(&config.authority_config, &config.params_config.tip)
+			.await?,
 		"federated authority data mismatch"
 	);
 

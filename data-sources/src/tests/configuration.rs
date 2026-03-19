@@ -25,6 +25,15 @@ pub struct IntegrationTestConfig {
 	pub epoch_config: MainchainEpochConfig,
 	pub authority_config: FederatedAuthorityObservationConfig,
 	pub block_source_config: DbSyncBlockDataSourceConfig,
+	pub params_config: ParamsConfig,
+}
+
+#[derive(Debug, Clone)]
+pub struct ParamsConfig {
+	pub epoch_number: McEpochNumber,
+	pub tx_capacity: usize,
+	pub tip: McBlockHash,
+	pub timestamp: Timestamp,
 }
 
 #[derive(Debug, Error)]
@@ -95,6 +104,13 @@ impl IntegrationTestConfig {
 			cnight_asset_name,
 		};
 
+		let params_config = ParamsConfig {
+			epoch_number: McEpochNumber(parse_u32("EPOCH_NUMBER")?),
+			tx_capacity: parse_u32("TX_CAPACITY")? as usize,
+			tip: parse_block_hash("TIP_HASH")?,
+			timestamp: Timestamp::new(parse_u64("TIMESTAMP")?),
+		};
+
 		Ok(Self {
 			postgres_uri,
 			grpc_endpoint,
@@ -105,12 +121,47 @@ impl IntegrationTestConfig {
 			authority_config,
 			epoch_config,
 			block_source_config,
+			params_config,
 		})
 	}
 }
 
 fn get_env(var: &str) -> Result<String, IntegrationTestConfigError> {
 	env::var(var).map_err(|_| IntegrationTestConfigError::MissingVar(var.into()))
+}
+
+fn parse_u32(var: &str) -> Result<u32, IntegrationTestConfigError> {
+	let value = get_env(var)?;
+
+	value
+		.parse::<u32>()
+		.map_err(|e| IntegrationTestConfigError::Malformed(format!("{}={} ({})", var, value, e)))
+}
+
+fn parse_u64(var: &str) -> Result<u64, IntegrationTestConfigError> {
+	let value = get_env(var)?;
+
+	value
+		.parse::<u64>()
+		.map_err(|e| IntegrationTestConfigError::Malformed(format!("{}={} ({})", var, value, e)))
+}
+
+fn parse_block_hash(var: &str) -> Result<McBlockHash, IntegrationTestConfigError> {
+	let value = get_env(var)?;
+
+	let bytes = hex::decode(&value).map_err(|e| {
+		IntegrationTestConfigError::Malformed(format!("{var}={value} (invalid hex: {e})"))
+	})?;
+
+	let len = bytes.len();
+
+	let arr: [u8; 32] = bytes.try_into().map_err(|_| {
+		IntegrationTestConfigError::Malformed(format!(
+			"{var}={value} (expected 32 bytes, got {len})"
+		))
+	})?;
+
+	Ok(McBlockHash(arr))
 }
 
 fn parse_policy_id(var: &str) -> Result<PolicyId, IntegrationTestConfigError> {
@@ -124,13 +175,6 @@ fn parse_policy_id(var: &str) -> Result<PolicyId, IntegrationTestConfigError> {
 		.map_err(|_| IntegrationTestConfigError::Malformed(format!("{var}: wrong length")))?;
 
 	Ok(PolicyId(arr))
-}
-
-pub struct ParamsConfig {
-	pub epoch_number: McEpochNumber,
-	pub tx_capacity: usize,
-	pub tip: McBlockHash,
-	pub timestamp: Timestamp,
 }
 
 const DEFAULT_SECURITY_PARAMETER: u32 = 432;

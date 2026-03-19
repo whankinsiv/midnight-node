@@ -10,13 +10,12 @@ use crate::{
 	MidnightCNightObservationGrpcImpl,
 	tests::{
 		common::{CNIGHT_OBSERVATION_POOL_CFG, get_connection},
-		configuration::{IntegrationTestConfig, ParamsConfig},
+		configuration::IntegrationTestConfig,
 	},
 };
 
 pub async fn test_grpc_cnight_observation_against_db_sync(
 	config: &IntegrationTestConfig,
-	params: &ParamsConfig,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 	let start_position = CardanoPosition {
 		block_hash: McBlockHash([0; 32]),
@@ -32,16 +31,16 @@ pub async fn test_grpc_cnight_observation_against_db_sync(
 		.get_utxos_up_to_capacity(
 			&config.cnight_config,
 			&start_position,
-			params.tip.clone(),
-			params.tx_capacity,
+			config.params_config.tip.clone(),
+			config.params_config.tx_capacity,
 		)
 		.await?;
 	let grpc_utxos = grpc
 		.get_utxos_up_to_capacity(
 			&config.cnight_config,
 			&start_position,
-			params.tip.clone(),
-			params.tx_capacity,
+			config.params_config.tip.clone(),
+			config.params_config.tx_capacity,
 		)
 		.await?;
 

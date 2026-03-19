@@ -7,21 +7,20 @@ use crate::{
 	AuthoritySelectionDataSourceGrpcImpl,
 	tests::{
 		common::{STANDARD_POOL_CFG, get_connection},
-		configuration::{IntegrationTestConfig, ParamsConfig},
+		configuration::IntegrationTestConfig,
 	},
 };
 
 pub async fn test_grpc_authority_selection_against_db_sync(
 	config: &IntegrationTestConfig,
-	params: &ParamsConfig,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 	let db_sync = create_dbsync_authority_selection_source(config).await?;
 	let grpc = AuthoritySelectionDataSourceGrpcImpl::connect(&config.grpc_endpoint).await?;
 
-	test_parameters_match(&grpc, &db_sync, config, params).await?;
-	test_epoch_candidates_match(&grpc, &db_sync, config, params).await?;
-	test_epoch_nonce_match(&grpc, &db_sync, params).await?;
-	test_data_epoch_match(&grpc, &db_sync, params).await?;
+	test_parameters_match(&grpc, &db_sync, config).await?;
+	test_epoch_candidates_match(&grpc, &db_sync, config).await?;
+	test_epoch_nonce_match(&grpc, &db_sync, config).await?;
+	test_data_epoch_match(&grpc, &db_sync, config).await?;
 
 	Ok(())
 }
@@ -30,18 +29,17 @@ async fn test_parameters_match(
 	grpc: &AuthoritySelectionDataSourceGrpcImpl,
 	db_sync: &CandidatesDataSourceImpl,
 	cfg: &IntegrationTestConfig,
-	params: &ParamsConfig,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 	assert_eq!(
 		db_sync
 			.get_ariadne_parameters(
-				params.epoch_number,
+				cfg.params_config.epoch_number,
 				cfg.d_parameter_policy_id.clone(),
 				cfg.permissioned_candidates_policy.clone(),
 			)
 			.await?,
 		grpc.get_ariadne_parameters(
-			params.epoch_number,
+			cfg.params_config.epoch_number,
 			cfg.d_parameter_policy_id.clone(),
 			cfg.permissioned_candidates_policy.clone(),
 		)
@@ -56,14 +54,16 @@ async fn test_epoch_candidates_match(
 	grpc: &AuthoritySelectionDataSourceGrpcImpl,
 	db_sync: &CandidatesDataSourceImpl,
 	cfg: &IntegrationTestConfig,
-	params: &ParamsConfig,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 	assert_eq!(
 		db_sync
-			.get_candidates(params.epoch_number, cfg.committee_candidate_address.clone())
+			.get_candidates(cfg.params_config.epoch_number, cfg.committee_candidate_address.clone())
 			.await?,
-		grpc.get_candidates(params.epoch_number, cfg.committee_candidate_address.clone())
-			.await?,
+		grpc.get_candidates(
+			cfg.params_config.epoch_number,
+			cfg.committee_candidate_address.clone()
+		)
+		.await?,
 		"epoch candidates mismatch"
 	);
 
@@ -73,11 +73,11 @@ async fn test_epoch_candidates_match(
 async fn test_epoch_nonce_match(
 	grpc: &AuthoritySelectionDataSourceGrpcImpl,
 	db_sync: &CandidatesDataSourceImpl,
-	params: &ParamsConfig,
+	cfg: &IntegrationTestConfig,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 	assert_eq!(
-		db_sync.get_epoch_nonce(params.epoch_number).await?,
-		grpc.get_epoch_nonce(params.epoch_number).await?,
+		db_sync.get_epoch_nonce(cfg.params_config.epoch_number).await?,
+		grpc.get_epoch_nonce(cfg.params_config.epoch_number).await?,
 		"epoch nonce mismatch"
 	);
 
@@ -87,11 +87,11 @@ async fn test_epoch_nonce_match(
 async fn test_data_epoch_match(
 	grpc: &AuthoritySelectionDataSourceGrpcImpl,
 	db_sync: &CandidatesDataSourceImpl,
-	params: &ParamsConfig,
+	cfg: &IntegrationTestConfig,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 	assert_eq!(
-		db_sync.data_epoch(params.epoch_number).await?,
-		grpc.data_epoch(params.epoch_number).await?,
+		db_sync.data_epoch(cfg.params_config.epoch_number).await?,
+		grpc.data_epoch(cfg.params_config.epoch_number).await?,
 		"data epoch mismatch"
 	);
 

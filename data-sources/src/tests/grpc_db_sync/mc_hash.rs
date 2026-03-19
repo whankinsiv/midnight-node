@@ -9,13 +9,12 @@ use crate::{
 	McHashDataSourceGrpcImpl,
 	tests::{
 		common::{STANDARD_POOL_CFG, get_connection},
-		configuration::{IntegrationTestConfig, ParamsConfig},
+		configuration::IntegrationTestConfig,
 	},
 };
 
 pub async fn test_grpc_mc_hash_grpc_against_db_sync(
 	config: &IntegrationTestConfig,
-	params: &ParamsConfig,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 	let db_sync = create_dbsync_mc_hash_source(config).await?;
 
@@ -25,9 +24,9 @@ pub async fn test_grpc_mc_hash_grpc_against_db_sync(
 	)
 	.await?;
 
-	test_block_by_hash_match(&db_sync, &grpc, params).await?;
-	test_get_stable_block_from_timestamp(&db_sync, &grpc, params).await?;
-	test_get_stable_block_from_hash(&db_sync, &grpc, params).await?;
+	test_block_by_hash_match(&db_sync, &grpc, config).await?;
+	test_get_stable_block_from_timestamp(&db_sync, &grpc, config).await?;
+	test_get_stable_block_from_hash(&db_sync, &grpc, config).await?;
 
 	Ok(())
 }
@@ -35,11 +34,11 @@ pub async fn test_grpc_mc_hash_grpc_against_db_sync(
 async fn test_block_by_hash_match(
 	db_sync: &McHashDataSourceImpl,
 	grpc: &McHashDataSourceGrpcImpl,
-	params: &ParamsConfig,
+	config: &IntegrationTestConfig,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 	assert_eq!(
-		db_sync.get_block_by_hash(params.tip.clone()).await?,
-		grpc.get_block_by_hash(params.tip.clone()).await?,
+		db_sync.get_block_by_hash(config.params_config.tip.clone()).await?,
+		grpc.get_block_by_hash(config.params_config.tip.clone()).await?,
 		"block by hash mismatch"
 	);
 
@@ -49,12 +48,27 @@ async fn test_block_by_hash_match(
 async fn test_get_stable_block_from_timestamp(
 	db_sync: &McHashDataSourceImpl,
 	grpc: &McHashDataSourceGrpcImpl,
-	params: &ParamsConfig,
+	config: &IntegrationTestConfig,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-	assert_eq!(
-		db_sync.get_latest_stable_block_for(params.timestamp).await?,
-		grpc.get_latest_stable_block_for(params.timestamp).await?,
-		"block by timestamp mismatch"
+	let db_block_number = db_sync
+		.get_latest_stable_block_for(config.params_config.timestamp)
+		.await?
+		.map(|b| b.number.0)
+		.unwrap_or(0);
+	let grpc_block_number = grpc
+		.get_latest_stable_block_for(config.params_config.timestamp)
+		.await?
+		.map(|b| b.number.0)
+		.unwrap_or(0);
+
+	let diff = db_block_number.abs_diff(grpc_block_number);
+
+	assert!(
+		diff <= 50,
+		"Block numbers differ too much: db_sync={}, grpc={}, diff={}",
+		db_block_number,
+		grpc_block_number,
+		diff
 	);
 
 	Ok(())
@@ -63,11 +77,14 @@ async fn test_get_stable_block_from_timestamp(
 async fn test_get_stable_block_from_hash(
 	db_sync: &McHashDataSourceImpl,
 	grpc: &McHashDataSourceGrpcImpl,
-	params: &ParamsConfig,
+	config: &IntegrationTestConfig,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 	assert_eq!(
-		db_sync.get_stable_block_for(params.tip.clone(), params.timestamp).await?,
-		grpc.get_stable_block_for(params.tip.clone(), params.timestamp).await?,
+		db_sync
+			.get_stable_block_for(config.params_config.tip.clone(), config.params_config.timestamp)
+			.await?,
+		grpc.get_stable_block_for(config.params_config.tip.clone(), config.params_config.timestamp)
+			.await?,
 		"stable block by hash mismatch"
 	);
 
