@@ -24,6 +24,7 @@ pub enum AcropolisCNightObservationDataSourceError {
 	GRPCQueryError(tonic::Status),
 }
 
+#[derive(Clone)]
 pub struct MidnightCNightObservationGrpcImpl {
 	pub client: MidnightStateClient<Channel>,
 }
