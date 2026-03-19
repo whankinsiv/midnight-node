@@ -10,22 +10,18 @@ use sidechain_domain::McBlockHash;
 
 use crate::{
 	MidnightCNightObservationGrpcImpl,
-	tests::common::{CNIGHT_OBSERVATION_POOL_CFG, get_connection},
+	tests::{
+		common::{CNIGHT_OBSERVATION_POOL_CFG, get_connection},
+		configuration::IntegrationTestConfig,
+	},
 };
-
-const DEFAULT_MAPPING_VALIDATOR_ADDRESS: &str =
-	"addr_test1wpztklvv6scgyzne56ky0va0x5dmje56lf39eshxdha68rclu8fje";
-const DEFAULT_AUTH_TOKEN_ASSET_NAME: &str = "";
-const DEFAULT_CNIGHT_POLICY_ID: &str = "03cf16101d110dcad9cacb225f0d1e63a8809979e7feb60426995414";
-const DEFAULT_CNIGHT_ASSET_NAME: &str = "";
 
 const DEFAULT_TX_CAPACITY: usize = 200;
 
 pub async fn test_grpc_cnight_observation_against_db_sync(
-	postgres_uri: &str,
-	grpc_endpoint: &String,
+	test_config: &IntegrationTestConfig,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-	let config = load_cnight_config()?;
+	let config = load_cnight_config(test_config.clone())?;
 	let start_position = CardanoPosition {
 		block_hash: McBlockHash([0; 32]),
 		block_number: 0,
@@ -37,8 +33,9 @@ pub async fn test_grpc_cnight_observation_against_db_sync(
 		.and_then(|value| value.parse::<usize>().ok())
 		.unwrap_or(DEFAULT_TX_CAPACITY);
 
-	let db = create_dbsync_cnight_observation_source(postgres_uri).await?;
-	let grpc = MidnightCNightObservationGrpcImpl::connect(&grpc_endpoint).await?;
+	let db = create_dbsync_cnight_observation_source(&test_config.postgres_uri).await?;
+	let grpc =
+		MidnightCNightObservationGrpcImpl::connect(test_config.grpc_endpoint.clone()).await?;
 
 	let tip_raw = hex::decode("38d7fd275538e995454888c58137fd39cbf454bb2736feb2d81021964029cb93")?;
 	let tip_bytes: [u8; 32] = tip_raw
@@ -69,24 +66,14 @@ pub async fn test_grpc_cnight_observation_against_db_sync(
 	Ok(())
 }
 
-fn load_cnight_config() -> Result<CNightAddresses, Box<dyn Error + Send + Sync>> {
-	let cnight_policy_id = hex::decode(
-		env::var("CNIGHT_TEST_CNIGHT_POLICY_ID")
-			.unwrap_or_else(|_| DEFAULT_CNIGHT_POLICY_ID.to_string()),
-	)?
-	.try_into()
-	.map_err(|_| {
-		std::io::Error::new(std::io::ErrorKind::InvalidInput, "wrong cNIGHT policy id length")
-	})?;
-
+fn load_cnight_config(
+	cfg: IntegrationTestConfig,
+) -> Result<CNightAddresses, Box<dyn Error + Send + Sync>> {
 	Ok(CNightAddresses {
-		mapping_validator_address: env::var("CNIGHT_TEST_MAPPING_VALIDATOR_ADDRESS")
-			.unwrap_or_else(|_| DEFAULT_MAPPING_VALIDATOR_ADDRESS.to_string()),
-		auth_token_asset_name: env::var("CNIGHT_TEST_AUTH_TOKEN_ASSET_NAME")
-			.unwrap_or_else(|_| DEFAULT_AUTH_TOKEN_ASSET_NAME.to_string()),
-		cnight_policy_id,
-		cnight_asset_name: env::var("CNIGHT_TEST_CNIGHT_ASSET_NAME")
-			.unwrap_or_else(|_| DEFAULT_CNIGHT_ASSET_NAME.to_string()),
+		mapping_validator_address: cfg.mapping_validator_address,
+		auth_token_asset_name: cfg.auth_token_asset_name,
+		cnight_policy_id: cfg.cnight_policy_id,
+		cnight_asset_name: cfg.cnight_asset_name,
 	})
 }
 

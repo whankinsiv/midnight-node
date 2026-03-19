@@ -7766,6 +7766,7 @@ dependencies = [
  "async-trait",
  "authority-selection-inherents",
  "cardano-serialization-lib 14.1.2",
+ "dotenvy",
  "hex",
  "log",
  "midnight-primitives-cnight-observation",

@@ -1,36 +1,27 @@
-use std::{error::Error, str::FromStr};
+use std::error::Error;
 
 use authority_selection_inherents::AuthoritySelectionDataSource;
 use midnight_primitives_mainchain_follower::CandidatesDataSourceImpl;
-use sidechain_domain::{MainchainAddress, McEpochNumber, PolicyId};
+use sidechain_domain::McEpochNumber;
 
 use crate::{
 	AuthoritySelectionDataSourceGrpcImpl,
-	tests::common::{STANDARD_POOL_CFG, get_connection},
+	tests::{
+		common::{STANDARD_POOL_CFG, get_connection},
+		configuration::IntegrationTestConfig,
+	},
 };
 
 const DEFAULT_EPOCH: McEpochNumber = McEpochNumber(600);
 
-const DEFAULT_D_PARAM_POLICY: PolicyId = PolicyId([
-	0x11, 0x8a, 0x79, 0xbb, 0xb3, 0xef, 0x8f, 0x72, 0x3e, 0xb0, 0x41, 0x4d, 0xc9, 0x0f, 0x53, 0xb4,
-	0xfe, 0xa4, 0xed, 0x8b, 0xdd, 0x60, 0xe5, 0xac, 0x5c, 0x10, 0xd2, 0x70,
-]);
-const DEFAULT_PERMISSIONED_CANDIDATES_POLICY: PolicyId = PolicyId([
-	0x8a, 0xe1, 0x35, 0xf2, 0x79, 0xda, 0x14, 0x07, 0x6c, 0xf1, 0xdf, 0x73, 0xfb, 0x38, 0xdf, 0x70,
-	0x7f, 0xbe, 0x21, 0x43, 0xcc, 0xfe, 0x05, 0x05, 0x7c, 0xa4, 0xc0, 0x30,
-]);
-const DEFAULT_COMMITTEE_CANDIDATE_ADDRESS: &str =
-	"addr_test1wre2lz556a58uz3wy9jk2auahurs5cus2vfj3lpszknr4fsx9l69g";
-
 pub async fn test_grpc_authority_selection_against_db_sync(
-	postgres_uri: &str,
-	grpc_endpoint: &str,
+	config: &IntegrationTestConfig,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-	let db_sync = create_dbsync_authority_selection_source(postgres_uri).await?;
-	let grpc = AuthoritySelectionDataSourceGrpcImpl::connect(&grpc_endpoint).await?;
+	let db_sync = create_dbsync_authority_selection_source(&config.postgres_uri).await?;
+	let grpc = AuthoritySelectionDataSourceGrpcImpl::connect(&config.grpc_endpoint).await?;
 
-	test_parameters_match(&grpc, &db_sync).await?;
-	test_epoch_candidates_match(&grpc, &db_sync).await?;
+	test_parameters_match(&grpc, &db_sync, config).await?;
+	test_epoch_candidates_match(&grpc, &db_sync, config).await?;
 	test_epoch_nonce_match(&grpc, &db_sync).await?;
 	test_data_epoch_match(&grpc, &db_sync).await?;
 	Ok(())
@@ -39,19 +30,20 @@ pub async fn test_grpc_authority_selection_against_db_sync(
 async fn test_parameters_match(
 	grpc: &AuthoritySelectionDataSourceGrpcImpl,
 	db_sync: &CandidatesDataSourceImpl,
+	cfg: &IntegrationTestConfig,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 	let db_params = db_sync
 		.get_ariadne_parameters(
 			DEFAULT_EPOCH,
-			DEFAULT_D_PARAM_POLICY,
-			DEFAULT_PERMISSIONED_CANDIDATES_POLICY,
+			cfg.d_parameter_policy_id.clone(),
+			cfg.permissioned_candidates_policy.clone(),
 		)
 		.await?;
 	let grpc_params = grpc
 		.get_ariadne_parameters(
 			DEFAULT_EPOCH,
-			DEFAULT_D_PARAM_POLICY,
-			DEFAULT_PERMISSIONED_CANDIDATES_POLICY,
+			cfg.d_parameter_policy_id.clone(),
+			cfg.permissioned_candidates_policy.clone(),
 		)
 		.await?;
 
@@ -67,13 +59,14 @@ async fn test_parameters_match(
 async fn test_epoch_candidates_match(
 	grpc: &AuthoritySelectionDataSourceGrpcImpl,
 	db_sync: &CandidatesDataSourceImpl,
+	cfg: &IntegrationTestConfig,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-	let committee_candidate_address =
-		MainchainAddress::from_str(DEFAULT_COMMITTEE_CANDIDATE_ADDRESS)?;
 	let db_candidates = db_sync
-		.get_candidates(DEFAULT_EPOCH, committee_candidate_address.clone())
+		.get_candidates(DEFAULT_EPOCH, cfg.committee_candidate_address.clone())
 		.await?;
-	let grpc_candidates = grpc.get_candidates(DEFAULT_EPOCH, committee_candidate_address).await?;
+	let grpc_candidates = grpc
+		.get_candidates(DEFAULT_EPOCH, cfg.committee_candidate_address.clone())
+		.await?;
 
 	assert_eq!(db_candidates, grpc_candidates, "epoch candidates mismatch");
 	Ok(())
