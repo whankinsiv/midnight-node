@@ -7773,6 +7773,7 @@ dependencies = [
  "midnight-primitives-federated-authority-observation",
  "midnight-primitives-mainchain-follower",
  "pallet-sidechain-rpc",
+ "partner-chains-db-sync-data-sources",
  "partner-chains-plutus-data",
  "prost 0.13.5",
  "protoc-bin-vendored",

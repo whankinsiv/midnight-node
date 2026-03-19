@@ -3,9 +3,12 @@ use midnight_primitives_federated_authority_observation::{
 	AuthBodyConfig, FederatedAuthorityObservationConfig,
 };
 use midnight_primitives_mainchain_follower::partner_chains_db_sync_data_sources::DbSyncBlockDataSourceConfig;
-use sidechain_domain::{MainchainAddress, PolicyId, mainchain_epoch::MainchainEpochConfig};
+use sidechain_domain::{
+	MainchainAddress, McBlockHash, McEpochNumber, PolicyId, mainchain_epoch::MainchainEpochConfig,
+};
 use sp_core::offchain::Duration;
-use std::{env, str::FromStr};
+use sp_timestamp::Timestamp;
+use std::{env, path::Path, str::FromStr};
 use thiserror::Error;
 
 #[derive(Debug, Clone)]
@@ -38,7 +41,9 @@ pub enum IntegrationTestConfigError {
 
 impl IntegrationTestConfig {
 	pub fn from_env() -> Result<Self, IntegrationTestConfigError> {
-		dotenvy::dotenv()?;
+		let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/tests/.env.test");
+
+		dotenvy::from_path(path)?;
 
 		let postgres_uri = get_env("POSTGRES_URI")?;
 		let grpc_endpoint = get_env("GRPC_ENDPOINT")?;
@@ -119,6 +124,13 @@ fn parse_policy_id(var: &str) -> Result<PolicyId, IntegrationTestConfigError> {
 		.map_err(|_| IntegrationTestConfigError::Malformed(format!("{var}: wrong length")))?;
 
 	Ok(PolicyId(arr))
+}
+
+pub struct ParamsConfig {
+	pub epoch_number: McEpochNumber,
+	pub tx_capacity: usize,
+	pub tip: McBlockHash,
+	pub timestamp: Timestamp,
 }
 
 const DEFAULT_SECURITY_PARAMETER: u32 = 432;

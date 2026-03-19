@@ -44,6 +44,7 @@ protoc-bin-vendored = "3"
 tokio = { workspace = true }
 tokio-stream = { version = "0.1", features = ["net"] }
 sqlx = { version = "0.8.5", features = ["runtime-tokio-rustls", "postgres", "macros", "chrono", "migrate", "bigdecimal"]}
+partner-chains-db-sync-data-sources = { workspace = true, features = ["block-source", "candidate-source", "mc-hash", "sidechain-rpc", "bridge"] }
 hex.workspace = true
 dotenvy = "0.15"
 

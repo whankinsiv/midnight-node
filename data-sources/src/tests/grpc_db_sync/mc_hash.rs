@@ -1,32 +1,23 @@
 use std::{error::Error, sync::Arc};
 
 use midnight_primitives_mainchain_follower::partner_chains_db_sync_data_sources::{
-	BlockDataSourceImpl, DbSyncBlockDataSourceConfig, McHashDataSourceImpl,
+	BlockDataSourceImpl, McHashDataSourceImpl,
 };
-use sidechain_domain::{McBlockHash, mainchain_epoch::MainchainEpochConfig};
 use sidechain_mc_hash::McHashDataSource;
-use sp_timestamp::Timestamp;
 
 use crate::{
 	McHashDataSourceGrpcImpl,
 	tests::{
 		common::{STANDARD_POOL_CFG, get_connection},
-		configuration::IntegrationTestConfig,
+		configuration::{IntegrationTestConfig, ParamsConfig},
 	},
 };
 
-const DEFAULT_BLOCK_HASH: McBlockHash = McBlockHash([0; 32]);
-const DEFAULT_BLOCK_TIMESTAMP: Timestamp = Timestamp::new(0);
-
 pub async fn test_grpc_mc_hash_grpc_against_db_sync(
 	config: &IntegrationTestConfig,
+	params: &ParamsConfig,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-	let db_sync = create_dbsync_mc_hash_source(
-		&config.postgres_uri,
-		config.block_source_config.clone(),
-		&config.epoch_config,
-	)
-	.await?;
+	let db_sync = create_dbsync_mc_hash_source(config).await?;
 
 	let grpc = McHashDataSourceGrpcImpl::connect(
 		&config.grpc_endpoint,
@@ -34,20 +25,23 @@ pub async fn test_grpc_mc_hash_grpc_against_db_sync(
 	)
 	.await?;
 
-	test_block_by_hash_match(&db_sync, &grpc).await?;
-	test_get_stable_block_from_timestamp(&db_sync, &grpc).await?;
-	test_get_stable_block_from_hash(&db_sync, &grpc).await?;
+	test_block_by_hash_match(&db_sync, &grpc, params).await?;
+	test_get_stable_block_from_timestamp(&db_sync, &grpc, params).await?;
+	test_get_stable_block_from_hash(&db_sync, &grpc, params).await?;
+
 	Ok(())
 }
 
 async fn test_block_by_hash_match(
 	db_sync: &McHashDataSourceImpl,
 	grpc: &McHashDataSourceGrpcImpl,
+	params: &ParamsConfig,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-	let db_block_info = db_sync.get_block_by_hash(DEFAULT_BLOCK_HASH).await?;
-	let grpc_block_info = grpc.get_block_by_hash(DEFAULT_BLOCK_HASH).await?;
-
-	assert_eq!(db_block_info, grpc_block_info, "block by hash mismatch");
+	assert_eq!(
+		db_sync.get_block_by_hash(params.tip.clone()).await?,
+		grpc.get_block_by_hash(params.tip.clone()).await?,
+		"block by hash mismatch"
+	);
 
 	Ok(())
 }
@@ -55,11 +49,13 @@ async fn test_block_by_hash_match(
 async fn test_get_stable_block_from_timestamp(
 	db_sync: &McHashDataSourceImpl,
 	grpc: &McHashDataSourceGrpcImpl,
+	params: &ParamsConfig,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-	let db_block_info = db_sync.get_latest_stable_block_for(DEFAULT_BLOCK_TIMESTAMP).await?;
-	let grpc_block_info = grpc.get_latest_stable_block_for(DEFAULT_BLOCK_TIMESTAMP).await?;
-
-	assert_eq!(db_block_info, grpc_block_info, "block by timestamp mismatch");
+	assert_eq!(
+		db_sync.get_latest_stable_block_for(params.timestamp).await?,
+		grpc.get_latest_stable_block_for(params.timestamp).await?,
+		"block by timestamp mismatch"
+	);
 
 	Ok(())
 }
@@ -67,25 +63,26 @@ async fn test_get_stable_block_from_timestamp(
 async fn test_get_stable_block_from_hash(
 	db_sync: &McHashDataSourceImpl,
 	grpc: &McHashDataSourceGrpcImpl,
+	params: &ParamsConfig,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-	let db_block_info = db_sync
-		.get_stable_block_for(DEFAULT_BLOCK_HASH, DEFAULT_BLOCK_TIMESTAMP)
-		.await?;
-	let grpc_block_info =
-		grpc.get_stable_block_for(DEFAULT_BLOCK_HASH, DEFAULT_BLOCK_TIMESTAMP).await?;
-
-	assert_eq!(db_block_info, grpc_block_info, "stable block by hash mismatch");
+	assert_eq!(
+		db_sync.get_stable_block_for(params.tip.clone(), params.timestamp).await?,
+		grpc.get_stable_block_for(params.tip.clone(), params.timestamp).await?,
+		"stable block by hash mismatch"
+	);
 
 	Ok(())
 }
 
 async fn create_dbsync_mc_hash_source(
-	connection_string: &str,
-	block_source_config: DbSyncBlockDataSourceConfig,
-	epoch_config: &MainchainEpochConfig,
+	config: &IntegrationTestConfig,
 ) -> Result<McHashDataSourceImpl, Box<dyn Error + Send + Sync + 'static>> {
-	let mc_hash_pool = get_connection(connection_string, STANDARD_POOL_CFG, true).await?;
-	let mc_hash_block_data_source =
-		BlockDataSourceImpl::from_config(mc_hash_pool, block_source_config, epoch_config);
-	Ok(McHashDataSourceImpl::new(Arc::new(mc_hash_block_data_source), None))
+	Ok(McHashDataSourceImpl::new(
+		Arc::new(BlockDataSourceImpl::from_config(
+			get_connection(&config.postgres_uri, STANDARD_POOL_CFG, true).await?,
+			config.block_source_config.clone(),
+			&config.epoch_config,
+		)),
+		None,
+	))
 }
