@@ -55,11 +55,11 @@ impl McHashDataSourceGrpcImpl {
 impl McHashDataSource for McHashDataSourceGrpcImpl {
 	async fn get_latest_stable_block_for(
 		&self,
-		_reference_timestamp: Timestamp,
+		as_of_timestamp: Timestamp,
 	) -> Result<Option<MainchainBlock>, Box<dyn std::error::Error + Send + Sync>> {
 		let mut client = self.client.clone();
-		let offset = self.security_parameter + self.block_stability_margin;
-		get_latest_stable_block(&mut client, offset)
+		let stability_offset = self.security_parameter + self.block_stability_margin;
+		get_latest_stable_block(&mut client, stability_offset, as_of_timestamp.as_millis())
 			.await
 			.map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
 	}
@@ -67,11 +67,11 @@ impl McHashDataSource for McHashDataSourceGrpcImpl {
 	async fn get_stable_block_for(
 		&self,
 		hash: McBlockHash,
-		_reference_timestamp: Timestamp,
+		as_of_timestamp: Timestamp,
 	) -> Result<Option<MainchainBlock>, Box<dyn std::error::Error + Send + Sync>> {
 		let mut client = self.client.clone();
-		let offset = self.security_parameter + self.block_stability_margin;
-		get_stable_block(&mut client, hash, offset)
+		let stability_offset = self.security_parameter + self.block_stability_margin;
+		get_stable_block(&mut client, hash, stability_offset, as_of_timestamp.as_millis())
 			.await
 			.map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
 	}
