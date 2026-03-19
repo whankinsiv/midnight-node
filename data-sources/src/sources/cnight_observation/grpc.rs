@@ -7,7 +7,10 @@ use sidechain_domain::McBlockHash;
 use tonic::transport::{Channel, Endpoint};
 
 use crate::{
-	grpc::{midnight_state::midnight_state_client::MidnightStateClient, requests::cnight_observation_acropolis::{get_position_by_hash, get_utxo_events}},
+	grpc::{
+		midnight_state::midnight_state_client::MidnightStateClient,
+		requests::cnight_observation_acropolis::{get_position_by_hash, get_utxo_events},
+	},
 	sources::AcropolisDataSourceError,
 };
 
