@@ -1,3 +1,7 @@
+use midnight_primitives_cnight_observation::CNightAddresses;
+use midnight_primitives_federated_authority_observation::{
+	AuthBodyConfig, FederatedAuthorityObservationConfig,
+};
 use midnight_primitives_mainchain_follower::partner_chains_db_sync_data_sources::DbSyncBlockDataSourceConfig;
 use sidechain_domain::{MainchainAddress, PolicyId, mainchain_epoch::MainchainEpochConfig};
 use sp_core::offchain::Duration;
@@ -9,31 +13,15 @@ pub struct IntegrationTestConfig {
 	pub postgres_uri: String,
 	pub grpc_endpoint: String,
 
-	pub cnight_policy_id: [u8; 28],
-	pub mapping_validator_address: String,
-	pub auth_token_asset_name: String,
-	pub cnight_asset_name: String,
-
 	pub d_parameter_policy_id: PolicyId,
 	pub permissioned_candidates_policy: PolicyId,
 
 	pub committee_candidate_address: MainchainAddress,
-	pub council_address: String,
-	pub council_policy_id: PolicyId,
-	pub council_members_mainchain: Vec<PolicyId>,
-	pub technical_commitee_address: String,
-	pub technical_commitee_policy_id: PolicyId,
-	pub technical_commitee_members_mainchain: Vec<PolicyId>,
 
-	pub epoch_duration_millis: Duration,
-	pub slot_duration_millis: Duration,
-	pub first_epoch_timestamp_millis: u64,
-	pub first_epoch_number: u32,
-	pub first_slot_number: u64,
-
-	pub security_parameter: u32,
-	pub active_slots_coeff: f64,
-	pub block_stability_margin: u32,
+	pub cnight_config: CNightAddresses,
+	pub epoch_config: MainchainEpochConfig,
+	pub authority_config: FederatedAuthorityObservationConfig,
+	pub block_source_config: DbSyncBlockDataSourceConfig,
 }
 
 #[derive(Debug, Error)]
@@ -52,135 +40,85 @@ impl IntegrationTestConfig {
 	pub fn from_env() -> Result<Self, IntegrationTestConfigError> {
 		dotenvy::dotenv()?;
 
-		let postgres_uri = env::var("POSTGRES_URI")
-			.map_err(|_| IntegrationTestConfigError::MissingVar("POSTGRES_URI".into()))?;
-
-		let grpc_endpoint = env::var("GRPC_ENDPOINT")
-			.map_err(|_| IntegrationTestConfigError::MissingVar("GRPC_ENDPOINT".into()))?;
-
-		let cnight_policy_id: [u8; 28] = hex::decode(
-			env::var("CNIGHT_POLICY_ID")
-				.map_err(|_| IntegrationTestConfigError::MissingVar("CNIGHT_POLICY_ID".into()))?,
-		)
-		.map_err(|_| IntegrationTestConfigError::Malformed("CNIGHT_POLICY_ID".into()))?
-		.try_into()
-		.map_err(|_| IntegrationTestConfigError::Malformed("CNIGHT_POLICY_ID".into()))?;
-
-		let cnight_asset_name = env::var("CNIGHT_ASSET_NAME")
-			.map_err(|_| IntegrationTestConfigError::MissingVar("CNIGHT_ASSET_NAME".into()))?;
-
-		let mapping_validator_address = env::var("MAPPING_VALIDATOR_ADDRESS").map_err(|_| {
-			IntegrationTestConfigError::MissingVar("MAPPING_VALIDATOR_ADDRESS".into())
-		})?;
-
-		let auth_token_asset_name = env::var("AUTH_TOKEN_ASSET_NAME")
-			.map_err(|_| IntegrationTestConfigError::MissingVar("AUTH_TOKEN_ASSET_NAME".into()))?;
-
-		let d_parameter_policy_id = PolicyId(
-			hex::decode(env::var("D_PARAMETER_POLICY_ID").map_err(|_| {
-				IntegrationTestConfigError::MissingVar("D_PARAMETER_POLICY_ID".into())
-			})?)
-			.map_err(|_| IntegrationTestConfigError::Malformed("D_PARAMETER_POLICY_ID".into()))?
-			.try_into()
-			.map_err(|_| IntegrationTestConfigError::Malformed("D_PARAMETER_POLICY_ID".into()))?,
-		);
-
-		let permissioned_candidates_policy = PolicyId(
-			hex::decode(env::var("PERMISSIONED_CANDIDATES_POLICY").map_err(|_| {
-				IntegrationTestConfigError::MissingVar("PERMISSIONED_CANDIDATES_POLICY".into())
-			})?)
-			.map_err(|_| {
-				IntegrationTestConfigError::Malformed("PERMISSIONED_CANDIDATES_POLICY".into())
-			})?
-			.try_into()
-			.map_err(|_| {
-				IntegrationTestConfigError::Malformed("PERMISSIONED_CANDIDATES_POLICY".into())
-			})?,
-		);
-
-		let committee_candidate_address =
-			MainchainAddress::from_str(&env::var("COMMITTEE_CANDIDATE_ADDRESS").map_err(|_| {
-				IntegrationTestConfigError::MissingVar("COMMITTEE_CANDIDATE_ADDRESS".into())
-			})?)
+		let postgres_uri = get_env("POSTGRES_URI")?;
+		let grpc_endpoint = get_env("GRPC_ENDPOINT")?;
+		let cnight_policy_id = parse_policy_id("CNIGHT_POLICY_ID")?.0;
+		let cnight_asset_name = get_env("CNIGHT_ASSET_NAME")?;
+		let mapping_validator_address = get_env("MAPPING_VALIDATOR_ADDRESS")?;
+		let auth_token_asset_name = get_env("AUTH_TOKEN_ASSET_NAME")?;
+		let d_parameter_policy_id = parse_policy_id("D_PARAMETER_POLICY_ID")?;
+		let permissioned_candidates_policy = parse_policy_id("PERMISSIONED_CANDIDATES_POLICY")?;
+		let raw_candidate_address = get_env("COMMITTEE_CANDIDATE_ADDRESS")?;
+		let committee_candidate_address = MainchainAddress::from_str(&raw_candidate_address)
 			.map_err(|e| {
 				IntegrationTestConfigError::Malformed(format!("COMMITTEE_CANDIDATE_ADDRESS: {e}"))
 			})?;
 
-		let council_address = env::var("COUNCIL_ADDRESS")
-			.map_err(|_| IntegrationTestConfigError::MissingVar("COUNCIL_ADDRESS".into()))?;
+		let authority_config = FederatedAuthorityObservationConfig {
+			council: AuthBodyConfig {
+				address: get_env("COUNCIL_ADDRESS")?,
+				policy_id: parse_policy_id("COUNCIL_POLICY_ID")?,
+				members: Vec::new(),
+				members_mainchain: DEFAULT_COUNCIL_MEMBERS_MAINCHAIN.to_vec(),
+			},
+			technical_committee: AuthBodyConfig {
+				address: get_env("TECHNICAL_COMMITTEE_ADDRESS")?,
+				policy_id: parse_policy_id("TECHNICAL_COMMITTEE_POLICY_ID")?,
+				members: Vec::new(),
+				members_mainchain: DEFAULT_TECHNICAL_COMMITTEE_MEMBERS_MAINCHAIN.to_vec(),
+			},
+		};
 
-		let council_policy_id =
-			PolicyId(
-				hex::decode(env::var("COUNCIL_POLICY_ID").map_err(|_| {
-					IntegrationTestConfigError::MissingVar("COUNCIL_POLICY_ID".into())
-				})?)
-				.map_err(|_| IntegrationTestConfigError::Malformed("COUNCIL_POLICY_ID".into()))?
-				.try_into()
-				.map_err(|_| IntegrationTestConfigError::Malformed("COUNCIL_POLICY_ID".into()))?,
-			);
+		let epoch_config = MainchainEpochConfig {
+			epoch_duration_millis: DEFAULT_EPOCH_DURATION_MILLIS,
+			slot_duration_millis: DEFAULT_SLOT_DURATION_MILLIS,
+			first_epoch_timestamp_millis: DEFAULT_FIRST_EPOCH_TIMESTAMP_MILLIS.into(),
+			first_epoch_number: DEFAULT_FIRST_EPOCH_NUMBER,
+			first_slot_number: DEFAULT_FIRST_SLOT_NUMBER,
+		};
 
-		let technical_commitee_address = env::var("TECHNICAL_COMMITEE_ADDRESS").map_err(|_| {
-			IntegrationTestConfigError::MissingVar("TECHNICAL_COMMITEE_ADDRESS".into())
-		})?;
+		let block_source_config = DbSyncBlockDataSourceConfig {
+			cardano_security_parameter: DEFAULT_SECURITY_PARAMETER,
+			cardano_active_slots_coeff: DEFAULT_ACTIVE_SLOTS_COEFF,
+			block_stability_margin: DEFAULT_BLOCK_STABILITY_MARGIN,
+		};
 
-		let technical_commitee_policy_id = PolicyId(
-			hex::decode(env::var("TECHNICAL_COMMITEE_POLICY_ID").map_err(|_| {
-				IntegrationTestConfigError::MissingVar("TECHNICAL_COMMITEE_POLICY_ID".into())
-			})?)
-			.map_err(|_| {
-				IntegrationTestConfigError::Malformed("TECHNICAL_COMMITEE_POLICY_ID".into())
-			})?
-			.try_into()
-			.map_err(|_| {
-				IntegrationTestConfigError::Malformed("TECHNICAL_COMMITEE_POLICY_ID".into())
-			})?,
-		);
+		let cnight_config = CNightAddresses {
+			mapping_validator_address,
+			auth_token_asset_name,
+			cnight_policy_id,
+			cnight_asset_name,
+		};
 
 		Ok(Self {
 			postgres_uri,
 			grpc_endpoint,
-			cnight_policy_id,
-			cnight_asset_name,
-			mapping_validator_address,
-			auth_token_asset_name,
 			d_parameter_policy_id,
 			permissioned_candidates_policy,
 			committee_candidate_address,
-			council_address,
-			council_policy_id,
-			council_members_mainchain: DEFAULT_COUNCIL_MEMBERS_MAINCHAIN.to_vec(),
-			technical_commitee_address,
-			technical_commitee_policy_id,
-			technical_commitee_members_mainchain: DEFAULT_TECHNICAL_COMMITEE_MEMBERS_MAINCHAIN
-				.to_vec(),
-			epoch_duration_millis: DEFAULT_EPOCH_DURATION_MILLIS,
-			slot_duration_millis: DEFAULT_SLOT_DURATION_MILLIS,
-			first_epoch_timestamp_millis: DEFAULT_FIRST_EPOCH_TIMESTAMP_MILLIS,
-			first_epoch_number: DEFAULT_FIRST_EPOCH_NUMBER,
-			first_slot_number: DEFAULT_FIRST_SLOT_NUMBER,
-			security_parameter: DEFAULT_SECURITY_PARAMETER,
-			active_slots_coeff: DEFAULT_ACTIVE_SLOTS_COEFF,
-			block_stability_margin: DEFAULT_BLOCK_STABILITY_MARGIN,
+			cnight_config,
+			authority_config,
+			epoch_config,
+			block_source_config,
 		})
 	}
+}
 
-	pub fn load_epoch_config(&self) -> MainchainEpochConfig {
-		MainchainEpochConfig {
-			epoch_duration_millis: self.epoch_duration_millis,
-			slot_duration_millis: self.slot_duration_millis,
-			first_epoch_timestamp_millis: self.first_epoch_timestamp_millis.into(),
-			first_epoch_number: self.first_epoch_number,
-			first_slot_number: self.first_slot_number,
-		}
-	}
+fn get_env(var: &str) -> Result<String, IntegrationTestConfigError> {
+	env::var(var).map_err(|_| IntegrationTestConfigError::MissingVar(var.into()))
+}
 
-	pub fn load_block_source_config(&self) -> DbSyncBlockDataSourceConfig {
-		DbSyncBlockDataSourceConfig {
-			cardano_security_parameter: self.security_parameter,
-			cardano_active_slots_coeff: self.active_slots_coeff,
-			block_stability_margin: self.block_stability_margin,
-		}
-	}
+fn parse_policy_id(var: &str) -> Result<PolicyId, IntegrationTestConfigError> {
+	let raw = get_env(var)?;
+
+	let bytes = hex::decode(&raw)
+		.map_err(|e| IntegrationTestConfigError::Malformed(format!("{var}: {e}")))?;
+
+	let arr: [u8; 28] = bytes
+		.try_into()
+		.map_err(|_| IntegrationTestConfigError::Malformed(format!("{var}: wrong length")))?;
+
+	Ok(PolicyId(arr))
 }
 
 const DEFAULT_SECURITY_PARAMETER: u32 = 432;
@@ -207,7 +145,7 @@ const DEFAULT_COUNCIL_MEMBERS_MAINCHAIN: [PolicyId; 3] = [
 		0xc2, 0xb2, 0xc1, 0xc0, 0x66, 0x28, 0x5d, 0x51, 0x5e, 0x3a, 0x80, 0x47, 0x2d,
 	]),
 ];
-const DEFAULT_TECHNICAL_COMMITEE_MEMBERS_MAINCHAIN: [PolicyId; 3] = [
+const DEFAULT_TECHNICAL_COMMITTEE_MEMBERS_MAINCHAIN: [PolicyId; 3] = [
 	PolicyId([
 		0xb9, 0x4a, 0x81, 0x87, 0x1d, 0xa1, 0x64, 0x63, 0x7b, 0x21, 0x30, 0xe0, 0x64, 0x34, 0xc3,
 		0x00, 0xba, 0x2d, 0x30, 0x88, 0x26, 0x8f, 0x80, 0x98, 0xa7, 0xdd, 0xf2, 0x46,

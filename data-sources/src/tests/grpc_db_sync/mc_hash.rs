@@ -21,17 +21,18 @@ const DEFAULT_BLOCK_TIMESTAMP: Timestamp = Timestamp::new(0);
 pub async fn test_grpc_mc_hash_grpc_against_db_sync(
 	config: &IntegrationTestConfig,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-	let block_source_config = config.load_block_source_config();
-	let epoch_config = config.load_epoch_config();
-
 	let db_sync = create_dbsync_mc_hash_source(
 		&config.postgres_uri,
-		block_source_config.clone(),
-		&epoch_config,
+		config.block_source_config.clone(),
+		&config.epoch_config,
 	)
 	.await?;
-	let grpc =
-		McHashDataSourceGrpcImpl::connect(&config.grpc_endpoint, block_source_config).await?;
+
+	let grpc = McHashDataSourceGrpcImpl::connect(
+		&config.grpc_endpoint,
+		config.block_source_config.clone(),
+	)
+	.await?;
 
 	test_block_by_hash_match(&db_sync, &grpc).await?;
 	test_get_stable_block_from_timestamp(&db_sync, &grpc).await?;

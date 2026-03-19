@@ -45,8 +45,8 @@ async fn create_dbsync_sidechain_rpc_source(
 	let sidechain_pool = get_connection(connection_string, STANDARD_POOL_CFG, true).await?;
 	let sidechain_block_data_source = Arc::new(BlockDataSourceImpl::from_config(
 		sidechain_pool,
-		config.load_block_source_config(),
-		&config.load_epoch_config(),
+		config.block_source_config.clone(),
+		&config.epoch_config,
 	));
 	Ok(SidechainRpcDataSourceImpl::new(sidechain_block_data_source.clone(), None))
 }

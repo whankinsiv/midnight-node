@@ -1,8 +1,5 @@
 use std::error::Error;
 
-use midnight_primitives_federated_authority_observation::{
-	AuthBodyConfig, FederatedAuthorityObservationConfig,
-};
 use midnight_primitives_mainchain_follower::{
 	FederatedAuthorityObservationDataSource, FederatedAuthorityObservationDataSourceImpl,
 };
@@ -19,17 +16,17 @@ use crate::{
 const DEFAULT_BLOCK_HASH: McBlockHash = McBlockHash([0; 32]);
 
 pub async fn test_grpc_federated_authority_against_db_sync(
-	test_config: &IntegrationTestConfig,
+	config: &IntegrationTestConfig,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-	let config = load_federated_authority_config(test_config.clone());
+	let db_sync = create_dbsync_federated_authority_source(&config.postgres_uri).await?;
+	let grpc = FederatedAuthorityObservationGrpcImpl::connect(&config.grpc_endpoint).await?;
 
-	let db_sync = create_dbsync_federated_authority_source(&test_config.postgres_uri).await?;
-	let grpc = FederatedAuthorityObservationGrpcImpl::connect(&test_config.grpc_endpoint).await?;
-
-	let db_federated_data =
-		db_sync.get_federated_authority_data(&config, &DEFAULT_BLOCK_HASH).await?;
-	let grpc_federated_data =
-		grpc.get_federated_authority_data(&config, &DEFAULT_BLOCK_HASH).await?;
+	let db_federated_data = db_sync
+		.get_federated_authority_data(&config.authority_config, &DEFAULT_BLOCK_HASH)
+		.await?;
+	let grpc_federated_data = grpc
+		.get_federated_authority_data(&config.authority_config, &DEFAULT_BLOCK_HASH)
+		.await?;
 
 	assert_eq!(
 		db_federated_data.council_authorities, grpc_federated_data.council_authorities,
@@ -46,25 +43,6 @@ pub async fn test_grpc_federated_authority_against_db_sync(
 	);
 
 	Ok(())
-}
-
-fn load_federated_authority_config(
-	cfg: IntegrationTestConfig,
-) -> FederatedAuthorityObservationConfig {
-	FederatedAuthorityObservationConfig {
-		council: AuthBodyConfig {
-			address: cfg.council_address,
-			policy_id: cfg.council_policy_id,
-			members: Vec::new(),
-			members_mainchain: cfg.council_members_mainchain,
-		},
-		technical_committee: AuthBodyConfig {
-			address: cfg.technical_commitee_address,
-			policy_id: cfg.technical_commitee_policy_id,
-			members: Vec::new(),
-			members_mainchain: cfg.technical_commitee_members_mainchain,
-		},
-	}
 }
 
 async fn create_dbsync_federated_authority_source(
