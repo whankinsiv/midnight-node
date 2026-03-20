@@ -1,32 +1,48 @@
 use core::fmt;
 use std::{error::Error, str::FromStr, time::Duration};
 
+use authority_selection_inherents::AuthoritySelectionDataSource;
 use criterion::{Criterion, criterion_group, criterion_main};
 use tokio::runtime::Runtime;
 
-use midnight_node_data_sources::MidnightCNightObservationGrpcImpl;
+use midnight_node_data_sources::{
+	AuthoritySelectionDataSourceGrpcImpl, MidnightCNightObservationGrpcImpl,
+};
 use midnight_primitives_cnight_observation::{
 	CNightAddresses, CardanoPosition, TimestampUnixMillis,
 };
 use midnight_primitives_mainchain_follower::{
-	MidnightCNightObservationDataSource, MidnightCNightObservationDataSourceImpl,
+	CandidatesDataSourceImpl, MidnightCNightObservationDataSource,
+	MidnightCNightObservationDataSourceImpl,
 };
-use sidechain_domain::McBlockHash;
+use sidechain_domain::{McBlockHash, McEpochNumber, PolicyId};
 
-pub const CNIGHT_OBSERVATION_POOL_CFG: DbPoolCfg =
-	DbPoolCfg { acquire_timeout: Duration::from_secs(30), max_connections: 10 };
+const GRPC_CONNECTION_STRING: &str = "http://127.0.0.1:50051";
+const DB_SYNC_ENDPOINT: &str = "postgres://postgres:8a91505e310244ba@localhost:15432/cexplorer";
+
+const TEST_EPOCH: McEpochNumber = McEpochNumber(1220u32);
+const TEST_D_PARAM_POLICY: PolicyId = PolicyId([
+	0x11, 0x8a, 0x79, 0xbb, 0xb3, 0xef, 0x8f, 0x72, 0x3e, 0xb0, 0x41, 0x4d, 0xc9, 0x0f, 0x53, 0xb4,
+	0xfe, 0xa4, 0xed, 0x8b, 0xdd, 0x60, 0xe5, 0xac, 0x5c, 0x10, 0xd2, 0x70,
+]);
+const PERMISSIONED_CANDIDATES_POLICY: PolicyId = PolicyId([
+	0x8a, 0xe1, 0x35, 0xf2, 0x79, 0xda, 0x14, 0x07, 0x6c, 0xf1, 0xdf, 0x73, 0xfb, 0x38, 0xdf, 0x70,
+	0x7f, 0xbe, 0x21, 0x43, 0xcc, 0xfe, 0x05, 0x05, 0x7c, 0xa4, 0xc0, 0x30,
+]);
 
 fn bench_cnight_utxos(c: &mut Criterion) {
 	let rt = Runtime::new().unwrap();
 
-	let (grpc, db_sync) = rt.block_on(async {
-		let db = create_dbsync_cnight_observation_source(
-			"postgres://postgres:8a91505e310244ba@localhost:15432/cexplorer",
-		)
-		.await
-		.expect("db init failed");
+	//
+	// MidnightCNightObservationDataSource
+	//
 
-		let grpc = MidnightCNightObservationGrpcImpl::connect("http://127.0.0.1:50051")
+	let (grpc, db_sync) = rt.block_on(async {
+		let db = create_dbsync_cnight_observation_source(DB_SYNC_ENDPOINT)
+			.await
+			.expect("db init failed");
+
+		let grpc = MidnightCNightObservationGrpcImpl::connect(GRPC_CONNECTION_STRING)
 			.await
 			.expect("grpc connect failed");
 
@@ -34,10 +50,6 @@ fn bench_cnight_utxos(c: &mut Criterion) {
 	});
 
 	let capacity = 200;
-
-	//
-	// MidnightCNightObservationDataSource
-	//
 
 	// ---- get_utxos_up_to_capacity ----
 	let mut group = c.benchmark_group("get_utxos_up_to_capacity");
@@ -84,7 +96,56 @@ fn bench_cnight_utxos(c: &mut Criterion) {
 	// AuthoritySelectionDataSource
 	//
 
+	let (grpc, db_sync) = rt.block_on(async {
+		let db = create_dbsync_authority_selection_source(DB_SYNC_ENDPOINT)
+			.await
+			.expect("db init failed");
+
+		let grpc = AuthoritySelectionDataSourceGrpcImpl::connect(GRPC_CONNECTION_STRING)
+			.await
+			.expect("grpc connect failed");
+
+		(grpc, db)
+	});
+
 	// ---- get_ariadne_parameters ----
+
+	bench_pair(
+		c,
+		&rt,
+		"get_ariadne_parameters",
+		{
+			let grpc = grpc.clone();
+			move || {
+				let grpc = grpc.clone();
+				async move {
+					grpc.get_ariadne_parameters(
+						TEST_EPOCH,
+						TEST_D_PARAM_POLICY,
+						PERMISSIONED_CANDIDATES_POLICY,
+					)
+					.await
+					.unwrap();
+				}
+			}
+		},
+		{
+			let db_sync = db_sync.clone();
+			move || {
+				let db_sync = db_sync.clone();
+				async move {
+					db_sync
+						.get_ariadne_parameters(
+							TEST_EPOCH,
+							TEST_D_PARAM_POLICY,
+							PERMISSIONED_CANDIDATES_POLICY,
+						)
+						.await
+						.unwrap();
+				}
+			}
+		},
+	);
 
 	// ---- get_candidates ----
 
@@ -119,6 +180,39 @@ criterion_group!(benches, bench_cnight_utxos);
 criterion_main!(benches);
 
 // ---- helpers ----
+pub const CNIGHT_OBSERVATION_POOL_CFG: DbPoolCfg =
+	DbPoolCfg { acquire_timeout: Duration::from_secs(30), max_connections: 10 };
+
+pub const STANDARD_POOL_CFG: DbPoolCfg =
+	DbPoolCfg { acquire_timeout: Duration::from_secs(30), max_connections: 5 };
+
+fn bench_pair<F1, F2, Fut1, Fut2>(
+	c: &mut Criterion,
+	rt: &tokio::runtime::Runtime,
+	group_name: &str,
+	grpc_fn: F1,
+	db_fn: F2,
+) where
+	F1: FnMut() -> Fut1 + Clone + 'static,
+	F2: FnMut() -> Fut2 + Clone + 'static,
+	Fut1: std::future::Future<Output = ()> + 'static,
+	Fut2: std::future::Future<Output = ()> + 'static,
+{
+	let mut group = c.benchmark_group(group_name);
+	group.sample_size(10);
+
+	group.bench_function("grpc", |b| {
+		let mut f = grpc_fn.clone();
+		b.to_async(rt).iter(&mut f);
+	});
+
+	group.bench_function("dbsync", |b| {
+		let mut f = db_fn.clone();
+		b.to_async(rt).iter(&mut f);
+	});
+
+	group.finish();
+}
 
 fn cnight_config() -> CNightAddresses {
 	CNightAddresses {
@@ -159,6 +253,16 @@ async fn create_dbsync_cnight_observation_source(
 		None,
 		1000,
 	))
+}
+
+async fn create_dbsync_authority_selection_source(
+	connection_string: &str,
+) -> Result<CandidatesDataSourceImpl, Box<dyn Error + Send + Sync + 'static>> {
+	CandidatesDataSourceImpl::new(
+		get_connection(connection_string, STANDARD_POOL_CFG, true).await?,
+		None,
+	)
+	.await
 }
 
 pub async fn get_connection(

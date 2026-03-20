@@ -125,6 +125,7 @@ impl TxInConfiguration {
 }
 
 /// Structure that queries, caches and provides Db-Sync configuration
+#[derive(Clone)]
 pub struct DbSyncConfigurationProvider {
 	/// Postgres connection pool
 	pub(crate) pool: PgPool,

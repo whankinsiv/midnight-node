@@ -51,6 +51,7 @@ struct RegisteredCandidate {
 }
 
 /// Db-Sync data source serving data for Partner Chain committee selection
+#[derive(Clone)]
 pub struct CandidatesDataSourceImpl {
 	/// Postgres connection pool
 	pool: PgPool,

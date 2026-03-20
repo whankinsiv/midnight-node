@@ -15,6 +15,7 @@ use crate::{
 	sources::cnight_observation::grpc::AcropolisCNightObservationDataSourceError,
 };
 
+#[derive(Clone)]
 pub struct AuthoritySelectionDataSourceGrpcImpl {
 	pub client: MidnightStateClient<Channel>,
 }
