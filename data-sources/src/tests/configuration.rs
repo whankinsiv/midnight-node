@@ -108,7 +108,7 @@ impl IntegrationTestConfig {
 			epoch_number: McEpochNumber(parse_u32("EPOCH_NUMBER")?),
 			tx_capacity: parse_u32("TX_CAPACITY")? as usize,
 			tip: parse_block_hash("TIP_HASH")?,
-			timestamp: Timestamp::new(parse_u64("TIMESTAMP")?),
+			timestamp: parse_timestamp("TIMESTAMP")?,
 		};
 
 		Ok(Self {
@@ -144,6 +144,17 @@ fn parse_u64(var: &str) -> Result<u64, IntegrationTestConfigError> {
 	value
 		.parse::<u64>()
 		.map_err(|e| IntegrationTestConfigError::Malformed(format!("{}={} ({})", var, value, e)))
+}
+
+fn parse_timestamp(var: &str) -> Result<Timestamp, IntegrationTestConfigError> {
+	let timestamp = parse_u64(var)?;
+	Ok(Timestamp::new(normalize_unix_timestamp(timestamp)))
+}
+
+fn normalize_unix_timestamp(timestamp: u64) -> u64 {
+	const UNIX_MILLIS_THRESHOLD: u64 = 1_000_000_000_000;
+
+	if timestamp < UNIX_MILLIS_THRESHOLD { timestamp * 1000 } else { timestamp }
 }
 
 fn parse_block_hash(var: &str) -> Result<McBlockHash, IntegrationTestConfigError> {

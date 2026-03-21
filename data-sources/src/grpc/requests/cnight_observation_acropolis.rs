@@ -48,19 +48,18 @@ pub async fn get_utxo_events(
 	let next_position = response
 		.next_position
 		.ok_or_else(|| tonic::Status::internal("missing next_position"))?;
+	let next_block_hash: [u8; 32] = next_position
+		.block_hash
+		.try_into()
+		.map_err(|_| Status::internal("invalid hash length"))?;
 
 	Ok(UtxoEventsResult {
 		events,
 		next_position: CardanoPosition {
-			block_hash: McBlockHash(hash32(next_position.block_hash)?),
+			block_hash: McBlockHash(next_block_hash),
 			block_number: next_position.block_number,
 			block_timestamp: TimestampUnixMillis(next_position.block_timestamp_unix_millis),
 			tx_index_in_block: next_position.tx_index,
 		},
 	})
-}
-
-#[allow(clippy::result_large_err)]
-fn hash32(bytes: Vec<u8>) -> Result<[u8; 32], Status> {
-	bytes.try_into().map_err(|_| Status::internal("invalid hash length"))
 }
