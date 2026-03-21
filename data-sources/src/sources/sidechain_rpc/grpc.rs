@@ -2,7 +2,10 @@ use pallet_sidechain_rpc::SidechainRpcDataSource;
 use sidechain_domain::MainchainBlock;
 use tonic::transport::{Channel, Endpoint};
 
-use crate::grpc::{midnight_state::midnight_state_client::MidnightStateClient, requests::sidechain_rpc_data_source_acropolis::get_latest_block};
+use crate::grpc::{
+	midnight_state::midnight_state_client::MidnightStateClient,
+	requests::sidechain_rpc_data_source_acropolis::get_latest_block,
+};
 
 pub struct SidechainRpcDataSourceGrpcImpl {
 	pub client: MidnightStateClient<Channel>,
