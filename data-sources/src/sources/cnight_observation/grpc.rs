@@ -59,15 +59,10 @@ impl MidnightCNightObservationDataSource for MidnightCNightObservationGrpcImpl {
 
 		let mut client = self.client.clone();
 
-		let response = get_utxo_events(
-			&mut client,
-			cardano_network,
-			start_position,
-			tx_capacity,
-			current_tip,
-		)
-		.await
-		.map_err(AcropolisDataSourceError::GRPCQueryError)?;
+		let response =
+			get_utxo_events(&mut client, cardano_network, start_position, tx_capacity, current_tip)
+				.await
+				.map_err(AcropolisDataSourceError::GRPCQueryError)?;
 
 		let start = start_position.clone();
 		let end = response.next_position;

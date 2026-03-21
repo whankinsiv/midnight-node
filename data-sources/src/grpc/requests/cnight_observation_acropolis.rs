@@ -25,8 +25,6 @@ pub async fn get_utxo_events(
 
 	let response = client
 		.get_utxo_events(UtxoEventsRequest {
-			start_block: start_position.block_number,
-			start_tx_index: start_position.tx_index_in_block,
 			tx_capacity,
 			end_block_hash: end_block_hash.0.to_vec(),
 			start_position: Some(GrpcCardanoPosition {
