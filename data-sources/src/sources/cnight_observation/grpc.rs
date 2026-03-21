@@ -71,8 +71,7 @@ impl MidnightCNightObservationDataSource for MidnightCNightObservationGrpcImpl {
 		.await
 		.map_err(AcropolisDataSourceError::GRPCQueryError)?;
 
-		// tx_count is intentionally incremented by one to match the db-sync impl
-		let tx_count = count_distinct_transactions(&utxos) + 1;
+		let tx_count = count_distinct_transactions(&utxos);
 
 		let start = start_position.clone();
 		let end = if tx_count < tx_capacity {
