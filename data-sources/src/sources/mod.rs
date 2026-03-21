@@ -1,3 +1,5 @@
+use sidechain_domain::McBlockHash;
+
 pub mod authority_selection;
 pub mod cnight_observation;
 pub mod federated_authority;
@@ -8,4 +10,6 @@ pub mod sidechain_rpc;
 pub enum AcropolisDataSourceError {
 	#[error("Error querying gRPC `{0}`")]
 	GRPCQueryError(tonic::Status),
+	#[error("missing reference for block hash `{0}` in acropolis")]
+	MissingBlockReference(McBlockHash),
 }

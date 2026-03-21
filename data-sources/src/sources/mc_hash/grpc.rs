@@ -1,9 +1,6 @@
-use crate::grpc::{
-	midnight_state::midnight_state_client::MidnightStateClient,
-	requests::mc_hash_data_source_acropolis::{
-		get_block_by_hash, get_latest_stable_block, get_stable_block,
-	},
-};
+use crate::grpc::{midnight_state::midnight_state_client::MidnightStateClient, requests::mc_hash_data_source_acropolis::{
+	get_block_by_hash, get_latest_stable_block, get_stable_block,
+}};
 use midnight_primitives_mainchain_follower::partner_chains_db_sync_data_sources::DbSyncBlockDataSourceConfig;
 use sidechain_domain::{MainchainBlock, McBlockHash};
 use sidechain_mc_hash::McHashDataSource;
@@ -55,11 +52,11 @@ impl McHashDataSourceGrpcImpl {
 impl McHashDataSource for McHashDataSourceGrpcImpl {
 	async fn get_latest_stable_block_for(
 		&self,
-		as_of_timestamp: Timestamp,
+		_reference_timestamp: Timestamp,
 	) -> Result<Option<MainchainBlock>, Box<dyn std::error::Error + Send + Sync>> {
 		let mut client = self.client.clone();
-		let stability_offset = self.security_parameter + self.block_stability_margin;
-		get_latest_stable_block(&mut client, stability_offset, as_of_timestamp.as_millis())
+		let offset = self.security_parameter + self.block_stability_margin;
+		get_latest_stable_block(&mut client, offset)
 			.await
 			.map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
 	}
@@ -67,11 +64,11 @@ impl McHashDataSource for McHashDataSourceGrpcImpl {
 	async fn get_stable_block_for(
 		&self,
 		hash: McBlockHash,
-		as_of_timestamp: Timestamp,
+		_reference_timestamp: Timestamp,
 	) -> Result<Option<MainchainBlock>, Box<dyn std::error::Error + Send + Sync>> {
 		let mut client = self.client.clone();
-		let stability_offset = self.security_parameter + self.block_stability_margin;
-		get_stable_block(&mut client, hash, stability_offset, as_of_timestamp.as_millis())
+		let offset = self.security_parameter + self.block_stability_margin;
+		get_stable_block(&mut client, hash, offset)
 			.await
 			.map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
 	}
