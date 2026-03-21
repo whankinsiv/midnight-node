@@ -1,5 +1,5 @@
 use core::fmt;
-use std::{error::Error, str::FromStr, time::Duration};
+use std::{env, error::Error, str::FromStr, time::Duration};
 
 use authority_selection_inherents::AuthoritySelectionDataSource;
 use criterion::{Criterion, criterion_group, criterion_main};
@@ -38,11 +38,11 @@ fn bench_cnight_utxos(c: &mut Criterion) {
 	//
 
 	let (grpc, db_sync) = rt.block_on(async {
-		let db = create_dbsync_cnight_observation_source(DB_SYNC_ENDPOINT)
+		let db = create_dbsync_cnight_observation_source(&bench_postgres_uri())
 			.await
 			.expect("db init failed");
 
-		let grpc = MidnightCNightObservationGrpcImpl::connect(GRPC_CONNECTION_STRING)
+		let grpc = MidnightCNightObservationGrpcImpl::connect(bench_grpc_endpoint())
 			.await
 			.expect("grpc connect failed");
 
@@ -243,6 +243,19 @@ fn current_tip() -> McBlockHash {
 			.try_into()
 			.unwrap(),
 	)
+}
+
+fn bench_postgres_uri() -> String {
+	env::var("BENCH_POSTGRES_URI")
+		.or_else(|_| env::var("CNIGHT_TEST_POSTGRES_URI"))
+		.or_else(|_| env::var("POSTGRES_URI"))
+		.unwrap_or_else(|_| "postgres://postgres:8a91505e310244ba@localhost:15432/cexplorer".into())
+}
+
+fn bench_grpc_endpoint() -> String {
+	env::var("BENCH_GRPC_ENDPOINT")
+		.or_else(|_| env::var("GRPC_ENDPOINT"))
+		.unwrap_or_else(|_| "http://127.0.0.1:50051".into())
 }
 
 async fn create_dbsync_cnight_observation_source(
