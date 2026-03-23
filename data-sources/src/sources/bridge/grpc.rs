@@ -86,18 +86,18 @@ mod tests {
 	use crate::grpc::midnight_state::{
 		AriadneParametersRequest, AriadneParametersResponse, AssetCreatesRequest,
 		AssetCreatesResponse, AssetSpendsRequest, AssetSpendsResponse, BlockByHashRequest,
-		BlockByHashResponse, BridgeCheckpoint, BridgeUtxo, BridgeUtxosRequest, BridgeUtxosResponse,
-		CouncilDatumRequest, CouncilDatumResponse, DeregistrationsRequest, DeregistrationsResponse,
-		EpochCandidatesRequest, EpochCandidatesResponse, EpochNonceRequest, EpochNonceResponse,
-		LatestBlockRequest, LatestBlockResponse, LatestStableBlockRequest,
-		LatestStableBlockResponse, RegistrationsRequest, RegistrationsResponse, StableBlockRequest,
+		BlockByHashResponse, BridgeCheckpoint, BridgeTransfer, BridgeTransfersRequest,
+		BridgeTransfersResponse, CouncilDatumRequest, CouncilDatumResponse, DeregistrationsRequest,
+		DeregistrationsResponse, EpochCandidatesRequest, EpochCandidatesResponse,
+		EpochNonceRequest, EpochNonceResponse, InvalidBridgeTransfer, LatestBlockRequest,
+		LatestBlockResponse, LatestStableBlockRequest, LatestStableBlockResponse,
+		RegistrationsRequest, RegistrationsResponse, ReserveBridgeTransfer, StableBlockRequest,
 		StableBlockResponse, TechnicalCommitteeDatumRequest, TechnicalCommitteeDatumResponse,
-		UtxoEventsRequest, UtxoEventsResponse, UtxoId, bridge_checkpoint, bridge_utxos_request,
+		UserBridgeTransfer, UtxoEventsRequest, UtxoEventsResponse, UtxoId, bridge_checkpoint,
+		bridge_transfer, bridge_transfers_request,
 		midnight_state_server::{MidnightState, MidnightStateServer},
 	};
-	use cardano_serialization_lib::PlutusData;
-	use partner_chains_plutus_data::bridge::TokenTransferDatumV1;
-	use sidechain_domain::{UtxoId as DomainUtxoId, byte_string::ByteString};
+	use sidechain_domain::UtxoId as DomainUtxoId;
 	use tokio::net::TcpListener;
 	use tokio::sync::{Mutex, oneshot};
 	use tokio_stream::wrappers::TcpListenerStream;
@@ -105,9 +105,8 @@ mod tests {
 
 	#[derive(Clone)]
 	struct TestMidnightStateService {
-		block_by_hash: Result<BlockByHashResponse, Status>,
-		bridge_utxos: Result<BridgeUtxosResponse, Status>,
-		last_request: Arc<Mutex<Option<BridgeUtxosRequest>>>,
+		bridge_transfers: Result<BridgeTransfersResponse, Status>,
+		last_request: Arc<Mutex<Option<BridgeTransfersRequest>>>,
 	}
 
 	#[tonic::async_trait]
@@ -126,12 +125,12 @@ mod tests {
 			Err(Status::unimplemented("not used in tests"))
 		}
 
-		async fn get_bridge_utxos(
+		async fn get_bridge_transfers(
 			&self,
-			request: Request<BridgeUtxosRequest>,
-		) -> Result<Response<BridgeUtxosResponse>, Status> {
+			request: Request<BridgeTransfersRequest>,
+		) -> Result<Response<BridgeTransfersResponse>, Status> {
 			*self.last_request.lock().await = Some(request.into_inner());
-			match &self.bridge_utxos {
+			match &self.bridge_transfers {
 				Ok(response) => Ok(Response::new(response.clone())),
 				Err(status) => Err(status.clone()),
 			}
@@ -176,10 +175,7 @@ mod tests {
 			&self,
 			_request: Request<BlockByHashRequest>,
 		) -> Result<Response<BlockByHashResponse>, Status> {
-			match &self.block_by_hash {
-				Ok(response) => Ok(Response::new(*response)),
-				Err(status) => Err(status.clone()),
-			}
+			Err(Status::unimplemented("not used in tests"))
 		}
 
 		async fn get_utxo_events(
@@ -262,36 +258,19 @@ mod tests {
 	async fn decodes_bridge_transfers_and_returns_next_checkpoint() {
 		let last_request = Arc::new(Mutex::new(None));
 		let server = TestServer::spawn(TestMidnightStateService {
-			block_by_hash: Ok(BlockByHashResponse {
-				block_number: 42,
-				tx_count: 0,
-				block_timestamp_unix: 0,
-				epoch_number: 0,
-				slot_number: 0,
-			}),
-			bridge_utxos: Ok(BridgeUtxosResponse {
-				utxos: vec![
-					BridgeUtxo {
-						tx_hash: vec![0x11; 32],
-						output_index: 0,
-						block_number: 40,
-						block_hash: vec![0x21; 32],
-						tx_index: 1,
-						block_timestamp_unix: 1_700_000_000,
-						tokens_out: 10,
-						tokens_in: 3,
-						datum: Some(user_transfer_datum_bytes([0xAA; 32])),
+			bridge_transfers: Ok(BridgeTransfersResponse {
+				transfers: vec![
+					BridgeTransfer {
+						kind: Some(bridge_transfer::Kind::User(UserBridgeTransfer {
+							token_amount: 7,
+							recipient: vec![0xAA; 32],
+							utxo: Some(UtxoId { tx_hash: vec![0x11; 32], index: 0 }),
+						})),
 					},
-					BridgeUtxo {
-						tx_hash: vec![0x12; 32],
-						output_index: 1,
-						block_number: 41,
-						block_hash: vec![0x22; 32],
-						tx_index: 2,
-						block_timestamp_unix: 1_700_000_001,
-						tokens_out: 20,
-						tokens_in: 5,
-						datum: Some(reserve_transfer_datum_bytes()),
+					BridgeTransfer {
+						kind: Some(bridge_transfer::Kind::Reserve(ReserveBridgeTransfer {
+							token_amount: 15,
+						})),
 					},
 				],
 				next_checkpoint: Some(BridgeCheckpoint {
@@ -327,55 +306,28 @@ mod tests {
 		assert_eq!(checkpoint, BridgeDataCheckpoint::Utxo(DomainUtxoId::new([0x12; 32], 1)));
 
 		let request = last_request.lock().await.clone().expect("bridge request should be captured");
-		assert_eq!(request.to_block, 42);
-		assert_eq!(request.utxo_capacity, 10);
-		assert_eq!(request.checkpoint, Some(bridge_utxos_request::Checkpoint::BlockNumber(9)));
+		assert_eq!(request.current_block_hash, vec![0x99; 32]);
+		assert_eq!(request.transfer_capacity, 10);
+		assert_eq!(request.checkpoint, Some(bridge_transfers_request::Checkpoint::BlockNumber(9)));
 	}
 
 	#[tokio::test]
 	async fn skips_zero_delta_and_marks_invalid_bridge_outputs() {
 		let server = TestServer::spawn(TestMidnightStateService {
-			block_by_hash: Ok(BlockByHashResponse {
-				block_number: 77,
-				tx_count: 0,
-				block_timestamp_unix: 0,
-				epoch_number: 0,
-				slot_number: 0,
-			}),
-			bridge_utxos: Ok(BridgeUtxosResponse {
-				utxos: vec![
-					BridgeUtxo {
-						tx_hash: vec![0x31; 32],
-						output_index: 0,
-						block_number: 75,
-						block_hash: vec![0x41; 32],
-						tx_index: 1,
-						block_timestamp_unix: 1_700_000_100,
-						tokens_out: 5,
-						tokens_in: 5,
-						datum: Some(reserve_transfer_datum_bytes()),
+			bridge_transfers: Ok(BridgeTransfersResponse {
+				transfers: vec![
+					BridgeTransfer {
+						kind: Some(bridge_transfer::Kind::Invalid(InvalidBridgeTransfer {
+							token_amount: 6,
+							utxo: Some(UtxoId { tx_hash: vec![0x32; 32], index: 1 }),
+						})),
 					},
-					BridgeUtxo {
-						tx_hash: vec![0x32; 32],
-						output_index: 1,
-						block_number: 76,
-						block_hash: vec![0x42; 32],
-						tx_index: 2,
-						block_timestamp_unix: 1_700_000_101,
-						tokens_out: 10,
-						tokens_in: 4,
-						datum: None,
-					},
-					BridgeUtxo {
-						tx_hash: vec![0x33; 32],
-						output_index: 2,
-						block_number: 77,
-						block_hash: vec![0x43; 32],
-						tx_index: 3,
-						block_timestamp_unix: 1_700_000_102,
-						tokens_out: 11,
-						tokens_in: 3,
-						datum: Some(vec![0x01, 0x02]),
+					BridgeTransfer {
+						kind: Some(bridge_transfer::Kind::User(UserBridgeTransfer {
+							token_amount: 8,
+							recipient: vec![0xFF; 64],
+							utxo: Some(UtxoId { tx_hash: vec![0x33; 32], index: 2 }),
+						})),
 					},
 				],
 				next_checkpoint: Some(BridgeCheckpoint {
@@ -412,16 +364,5 @@ mod tests {
 			]
 		);
 		assert_eq!(checkpoint, BridgeDataCheckpoint::Block(sidechain_domain::McBlockNumber(77)));
-	}
-
-	fn user_transfer_datum_bytes(recipient: [u8; 32]) -> Vec<u8> {
-		let datum: PlutusData =
-			TokenTransferDatumV1::UserTransfer { receiver: ByteString(recipient.to_vec()) }.into();
-		datum.to_bytes()
-	}
-
-	fn reserve_transfer_datum_bytes() -> Vec<u8> {
-		let datum: PlutusData = TokenTransferDatumV1::ReserveTransfer.into();
-		datum.to_bytes()
 	}
 }

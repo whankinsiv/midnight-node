@@ -11,17 +11,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use sidechain_domain::{McBlockHash, McBlockNumber};
+use sidechain_domain::McBlockHash;
 use sp_partner_chains_bridge::{BridgeDataCheckpoint, BridgeTransferV1};
 use tonic::{Status, transport::Channel};
 
 use crate::grpc::{
 	conversions::{
-		bridge_checkpoint_from_proto, bridge_checkpoint_to_proto, bridge_utxo_to_transfer,
+		bridge_checkpoint_from_proto, bridge_checkpoint_to_proto, bridge_transfer_from_proto,
 	},
-	midnight_state::{
-		BlockByHashRequest, BridgeUtxosRequest, midnight_state_client::MidnightStateClient,
-	},
+	midnight_state::{BridgeTransfersRequest, midnight_state_client::MidnightStateClient},
 };
 
 pub(crate) async fn get_bridge_transfers<RecipientAddress>(
@@ -33,21 +31,19 @@ pub(crate) async fn get_bridge_transfers<RecipientAddress>(
 where
 	RecipientAddress: for<'a> TryFrom<&'a [u8]>,
 {
-	let to_block = get_block_number_by_hash(client, current_mc_block_hash).await?;
-
 	let response = client
-		.get_bridge_utxos(BridgeUtxosRequest {
+		.get_bridge_transfers(BridgeTransfersRequest {
 			checkpoint: Some(bridge_checkpoint_to_proto(data_checkpoint)?),
-			to_block: u64::from(to_block.0),
-			utxo_capacity: max_transfers,
+			current_block_hash: current_mc_block_hash.0.to_vec(),
+			transfer_capacity: max_transfers,
 		})
 		.await?
 		.into_inner();
 
 	let transfers = response
-		.utxos
+		.transfers
 		.into_iter()
-		.map(bridge_utxo_to_transfer)
+		.map(bridge_transfer_from_proto)
 		.collect::<Result<Vec<_>, _>>()?
 		.into_iter()
 		.flatten()
@@ -56,20 +52,8 @@ where
 	let next_checkpoint = bridge_checkpoint_from_proto(
 		response
 			.next_checkpoint
-			.ok_or_else(|| Status::internal("BridgeUtxosResponse missing next_checkpoint"))?,
+			.ok_or_else(|| Status::internal("BridgeTransfersResponse missing next_checkpoint"))?,
 	)?;
 
 	Ok((transfers, next_checkpoint))
-}
-
-async fn get_block_number_by_hash(
-	client: &mut MidnightStateClient<Channel>,
-	block_hash: McBlockHash,
-) -> Result<McBlockNumber, Status> {
-	let response = client
-		.get_block_by_hash(BlockByHashRequest { block_hash: block_hash.0.to_vec() })
-		.await?
-		.into_inner();
-
-	Ok(McBlockNumber(response.block_number))
 }

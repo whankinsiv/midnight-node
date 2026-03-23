@@ -10,7 +10,6 @@ use midnight_primitives_federated_authority_observation::{
 	AuthorityMemberPublicKey, GovernanceAuthorityDatumR0, GovernanceAuthorityDatums,
 };
 use midnight_primitives_mainchain_follower::data_source::cnight_observation::RegistrationDatumDecodeError;
-use partner_chains_plutus_data::bridge::{TokenTransferDatum, TokenTransferDatumV1};
 use partner_chains_plutus_data::registered_candidates::RegisterValidatorDatum;
 use sidechain_domain::{
 	CandidateKeys, CrossChainPublicKey, CrossChainSignature, MainchainKeyHash, McBlockHash,
@@ -21,8 +20,9 @@ use std::{collections::HashMap, convert::TryFrom};
 use tonic::Status;
 
 use crate::grpc::midnight_state::{
-	BridgeCheckpoint, BridgeUtxo, EpochCandidate, StakePoolEntry, UtxoEvent, UtxoId as UtxoIdProto,
-	bridge_checkpoint, bridge_utxos_request, utxo_event::Kind,
+	BridgeCheckpoint, BridgeTransfer, EpochCandidate, StakePoolEntry, UserBridgeTransfer,
+	UtxoEvent, UtxoId as UtxoIdProto, bridge_checkpoint, bridge_transfer, bridge_transfers_request,
+	utxo_event::Kind,
 };
 
 #[derive(Debug)]
@@ -36,13 +36,13 @@ pub enum CandidateConversionError {
 #[allow(clippy::result_large_err)]
 pub fn bridge_checkpoint_to_proto(
 	checkpoint: BridgeDataCheckpoint,
-) -> Result<bridge_utxos_request::Checkpoint, Status> {
+) -> Result<bridge_transfers_request::Checkpoint, Status> {
 	match checkpoint {
 		BridgeDataCheckpoint::Block(block_number) => {
-			Ok(bridge_utxos_request::Checkpoint::BlockNumber(u64::from(block_number.0)))
+			Ok(bridge_transfers_request::Checkpoint::BlockNumber(u64::from(block_number.0)))
 		},
 		BridgeDataCheckpoint::Utxo(utxo) => {
-			Ok(bridge_utxos_request::Checkpoint::Utxo(UtxoIdProto {
+			Ok(bridge_transfers_request::Checkpoint::Utxo(UtxoIdProto {
 				tx_hash: utxo.tx_hash.0.to_vec(),
 				index: u32::from(utxo.index.0),
 			}))
@@ -68,45 +68,36 @@ pub fn bridge_checkpoint_from_proto(
 }
 
 #[allow(clippy::result_large_err)]
-pub fn bridge_utxo_to_transfer<RecipientAddress>(
-	utxo: BridgeUtxo,
+pub fn bridge_transfer_from_proto<RecipientAddress>(
+	transfer: BridgeTransfer,
 ) -> Result<Option<BridgeTransferV1<RecipientAddress>>, Status>
 where
 	RecipientAddress: for<'a> TryFrom<&'a [u8]>,
 {
-	let Some(token_amount) = utxo.tokens_out.checked_sub(utxo.tokens_in) else {
-		return Ok(None);
-	};
+	let kind = transfer.kind.ok_or_else(|| Status::internal("missing bridge transfer kind"))?;
 
-	if token_amount == 0 {
-		return Ok(None);
-	}
-
-	let utxo_id = bridge_utxo_id_from_proto(UtxoIdProto {
-		tx_hash: utxo.tx_hash.clone(),
-		index: utxo.output_index,
-	})?;
-
-	let Some(datum_bytes) = utxo.datum else {
-		return Ok(Some(BridgeTransferV1::InvalidTransfer { token_amount, utxo_id }));
-	};
-
-	let datum = match PlutusData::from_bytes(datum_bytes) {
-		Ok(datum) => datum,
-		Err(_) => return Ok(Some(BridgeTransferV1::InvalidTransfer { token_amount, utxo_id })),
-	};
-
-	let transfer = match TokenTransferDatum::try_from(datum) {
-		Ok(TokenTransferDatum::V1(TokenTransferDatumV1::UserTransfer { receiver })) => {
-			match RecipientAddress::try_from(receiver.0.as_ref()) {
+	let transfer = match kind {
+		bridge_transfer::Kind::Invalid(invalid) => {
+			let utxo = invalid
+				.utxo
+				.ok_or_else(|| Status::internal("missing invalid bridge transfer utxo"))?;
+			BridgeTransferV1::InvalidTransfer {
+				token_amount: invalid.token_amount,
+				utxo_id: bridge_utxo_id_from_proto(utxo)?,
+			}
+		},
+		bridge_transfer::Kind::User(UserBridgeTransfer { token_amount, recipient, utxo }) => {
+			let utxo_id = bridge_utxo_id_from_proto(
+				utxo.ok_or_else(|| Status::internal("missing user bridge transfer utxo"))?,
+			)?;
+			match RecipientAddress::try_from(recipient.as_ref()) {
 				Ok(recipient) => BridgeTransferV1::UserTransfer { token_amount, recipient },
 				Err(_) => BridgeTransferV1::InvalidTransfer { token_amount, utxo_id },
 			}
 		},
-		Ok(TokenTransferDatum::V1(TokenTransferDatumV1::ReserveTransfer)) => {
-			BridgeTransferV1::ReserveTransfer { token_amount }
+		bridge_transfer::Kind::Reserve(reserve) => {
+			BridgeTransferV1::ReserveTransfer { token_amount: reserve.token_amount }
 		},
-		Err(_) => BridgeTransferV1::InvalidTransfer { token_amount, utxo_id },
 	};
 
 	Ok(Some(transfer))

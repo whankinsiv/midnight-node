@@ -54,13 +54,14 @@ mod tests {
 		grpc::midnight_state::{
 			AriadneParametersRequest, AriadneParametersResponse, AssetCreatesRequest,
 			AssetCreatesResponse, AssetSpendsRequest, AssetSpendsResponse, BlockByHashRequest,
-			BlockByHashResponse, BridgeUtxosRequest, BridgeUtxosResponse, CouncilDatumRequest,
-			CouncilDatumResponse, DeregistrationsRequest, DeregistrationsResponse,
-			EpochCandidatesRequest, EpochCandidatesResponse, EpochNonceRequest, EpochNonceResponse,
-			LatestBlockRequest, LatestBlockResponse, LatestStableBlockRequest,
-			LatestStableBlockResponse, RegistrationsRequest, RegistrationsResponse,
-			StableBlockRequest, StableBlockResponse, TechnicalCommitteeDatumRequest,
-			TechnicalCommitteeDatumResponse, UtxoEventsRequest, UtxoEventsResponse,
+			BlockByHashResponse, BridgeTransfersRequest, BridgeTransfersResponse,
+			CouncilDatumRequest, CouncilDatumResponse, DeregistrationsRequest,
+			DeregistrationsResponse, EpochCandidatesRequest, EpochCandidatesResponse,
+			EpochNonceRequest, EpochNonceResponse, LatestBlockRequest, LatestBlockResponse,
+			LatestStableBlockRequest, LatestStableBlockResponse, RegistrationsRequest,
+			RegistrationsResponse, StableBlockRequest, StableBlockResponse,
+			TechnicalCommitteeDatumRequest, TechnicalCommitteeDatumResponse, UtxoEventsRequest,
+			UtxoEventsResponse,
 			midnight_state_server::{MidnightState, MidnightStateServer},
 		},
 		grpc::requests::federated_authority_data_source_acropolis::empty_authorities_data,
@@ -98,10 +99,10 @@ mod tests {
 			Err(Status::unimplemented("not used in tests"))
 		}
 
-		async fn get_bridge_utxos(
+		async fn get_bridge_transfers(
 			&self,
-			_request: Request<BridgeUtxosRequest>,
-		) -> Result<Response<BridgeUtxosResponse>, Status> {
+			_request: Request<BridgeTransfersRequest>,
+		) -> Result<Response<BridgeTransfersResponse>, Status> {
 			Err(Status::unimplemented("not used in tests"))
 		}
 
