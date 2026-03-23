@@ -215,26 +215,6 @@ pub enum InherentError {
 	UnexpectedTokenObserveInherent(Option<Vec<Vec<u8>>>, Option<Vec<Vec<u8>>>),
 	#[cfg_attr(feature = "std", error("Inherent data missing"))]
 	Missing,
-	#[cfg_attr(feature = "std", error("Malformed inherent data"))]
-	MalformedInherent,
-	#[cfg_attr(
-		feature = "std",
-		error(
-			"UTxO mismatch at index {index:?}: expected={expected:?} actual={actual:?} counts=({expected_count}, {actual_count})"
-		)
-	)]
-	UTxOMismatch {
-		index: Option<u32>,
-		expected: Box<Option<ObservedUtxo>>,
-		actual: Box<Option<ObservedUtxo>>,
-		expected_count: u32,
-		actual_count: u32,
-	},
-	#[cfg_attr(
-		feature = "std",
-		error("Cardano position mismatch: expected={expected} actual={actual}")
-	)]
-	PositionMismatch { expected: CardanoPosition, actual: CardanoPosition },
 	#[cfg_attr(feature = "std", error("Other unexpected inherent error"))]
 	Other,
 }
