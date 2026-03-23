@@ -1,47 +1,69 @@
 use crate::grpc::conversions::observed_utxo_from_event;
 use crate::grpc::midnight_state::{
-	BlockByHashRequest, UtxoEventsRequest, midnight_state_client::MidnightStateClient,
+	CardanoPosition as GrpcCardanoPosition, UtxoEventsRequest,
+	midnight_state_client::MidnightStateClient,
 };
 use midnight_primitives_cnight_observation::{CardanoPosition, ObservedUtxo, TimestampUnixMillis};
 use sidechain_domain::*;
 use tonic::Status;
 use tonic::transport::Channel;
 
+pub struct ObservedUtxoEvents {
+	pub utxos: Vec<ObservedUtxo>,
+	pub next_position: CardanoPosition,
+}
+
 pub async fn get_utxo_events(
 	client: &mut MidnightStateClient<Channel>,
 	cardano_network: u8,
-	start_block: u32,
-	start_tx_index: u32,
+	start_position: &CardanoPosition,
 	tx_capacity: usize,
-) -> Result<Vec<ObservedUtxo>, Status> {
+	end_block_hash: McBlockHash,
+) -> Result<ObservedUtxoEvents, Status> {
 	let tx_capacity = u32::try_from(tx_capacity)
 		.map_err(|_| tonic::Status::invalid_argument("utxo_capacity too large"))?;
 
 	let response = client
-		.get_utxo_events(UtxoEventsRequest { start_block, start_tx_index, tx_capacity })
+		.get_utxo_events(UtxoEventsRequest {
+			tx_capacity,
+			end_block_hash: end_block_hash.0.to_vec(),
+			start_position: Some(GrpcCardanoPosition {
+				block_hash: start_position.block_hash.0.to_vec(),
+				block_number: start_position.block_number,
+				tx_index: start_position.tx_index_in_block,
+				block_timestamp_unix_millis: start_position.block_timestamp.0,
+			}),
+		})
 		.await?
 		.into_inner();
 
-	response
+	let utxos = response
 		.events
 		.into_iter()
 		.map(|e| observed_utxo_from_event(e, cardano_network))
-		.collect()
+		.collect::<Result<Vec<_>, _>>()?;
+
+	let next_position = response
+		.next_position
+		.ok_or_else(|| Status::internal("missing next_position in UtxoEventsResponse"))
+		.and_then(cardano_position_from_response)?;
+
+	Ok(ObservedUtxoEvents { utxos, next_position })
 }
 
-pub(crate) async fn get_position_by_hash(
-	client: &mut MidnightStateClient<Channel>,
-	block_hash: McBlockHash,
+#[allow(clippy::result_large_err)]
+fn cardano_position_from_response(
+	position: GrpcCardanoPosition,
 ) -> Result<CardanoPosition, Status> {
-	let response = client
-		.get_block_by_hash(BlockByHashRequest { block_hash: block_hash.0.to_vec() })
-		.await?
-		.into_inner();
-
 	Ok(CardanoPosition {
-		block_hash,
-		block_number: response.block_number,
-		block_timestamp: TimestampUnixMillis(response.block_timestamp_unix * 1000),
-		tx_index_in_block: response.tx_count,
+		block_hash: McBlockHash(
+			position
+				.block_hash
+				.try_into()
+				.map_err(|_| Status::internal("invalid block hash length in next_position"))?,
+		),
+		block_number: position.block_number,
+		block_timestamp: TimestampUnixMillis(position.block_timestamp_unix_millis),
+		tx_index_in_block: position.tx_index,
 	})
 }

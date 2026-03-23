@@ -1,7 +1,5 @@
 use cardano_serialization_lib::Address;
-use midnight_primitives_cnight_observation::{
-	CNightAddresses, CardanoPosition, ObservedUtxo, ObservedUtxos,
-};
+use midnight_primitives_cnight_observation::{CNightAddresses, CardanoPosition, ObservedUtxos};
 use midnight_primitives_mainchain_follower::MidnightCNightObservationDataSource;
 use sidechain_domain::McBlockHash;
 use tonic::transport::{Channel, Endpoint};
@@ -9,7 +7,7 @@ use tonic::transport::{Channel, Endpoint};
 use crate::{
 	grpc::{
 		midnight_state::midnight_state_client::MidnightStateClient,
-		requests::cnight_observation_acropolis::{get_position_by_hash, get_utxo_events},
+		requests::cnight_observation_acropolis::get_utxo_events,
 	},
 	sources::AcropolisDataSourceError,
 };
@@ -61,29 +59,15 @@ impl MidnightCNightObservationDataSource for MidnightCNightObservationGrpcImpl {
 
 		let mut client = self.client.clone();
 
-		let utxos = get_utxo_events(
-			&mut client,
-			cardano_network,
-			start_position.block_number,
-			start_position.tx_index_in_block,
-			tx_capacity,
-		)
-		.await
-		.map_err(AcropolisDataSourceError::GRPCQueryError)?;
-
-		let tx_count = count_distinct_transactions(&utxos);
+		let response =
+			get_utxo_events(&mut client, cardano_network, start_position, tx_capacity, current_tip)
+				.await
+				.map_err(AcropolisDataSourceError::GRPCQueryError)?;
 
 		let start = start_position.clone();
-		let end = if tx_count < tx_capacity {
-			let end = get_position_by_hash(&mut client, current_tip.clone())
-				.await
-				.map_err(|_| AcropolisDataSourceError::MissingBlockReference(current_tip))?;
-			end.increment()
-		} else {
-			utxos.last().map_or(start.clone(), |u| u.header.tx_position.clone()).increment()
-		};
+		let end = response.next_position;
 
-		Ok(ObservedUtxos { start, end, utxos })
+		Ok(ObservedUtxos { start, end, utxos: response.utxos })
 	}
 }
 
@@ -100,21 +84,4 @@ fn get_cardano_network(
 			config.mapping_validator_address.clone(),
 		)
 	})
-}
-
-fn count_distinct_transactions(utxos: &[ObservedUtxo]) -> usize {
-	let mut tx_count = 0usize;
-	let mut last_tx: Option<(u32, u32)> = None;
-
-	for u in utxos {
-		let pos = &u.header.tx_position;
-		let cur = (pos.block_number, pos.tx_index_in_block);
-
-		if last_tx.is_none_or(|prev| prev < cur) {
-			tx_count += 1;
-			last_tx = Some(cur);
-		}
-	}
-
-	tx_count
 }

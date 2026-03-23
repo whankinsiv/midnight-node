@@ -8,3 +8,6 @@ pub use sources::{
 	federated_authority::grpc::FederatedAuthorityObservationGrpcImpl,
 	mc_hash::grpc::McHashDataSourceGrpcImpl, sidechain_rpc::grpc::SidechainRpcDataSourceGrpcImpl,
 };
+
+#[cfg(test)]
+mod tests;
