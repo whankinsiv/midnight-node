@@ -13,6 +13,7 @@ pub struct UtxoEventsResult {
 	pub next_position: CardanoPosition,
 }
 
+#[allow(clippy::result_large_err)]
 pub async fn get_utxo_events(
 	client: &mut MidnightStateClient<Channel>,
 	cardano_network: u8,
