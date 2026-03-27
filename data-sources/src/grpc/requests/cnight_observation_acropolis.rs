@@ -3,23 +3,20 @@ use crate::grpc::midnight_state::{
 	CardanoPosition as GrpcCardanoPosition, UtxoEventsRequest,
 	midnight_state_client::MidnightStateClient,
 };
-use midnight_primitives_cnight_observation::{
-	CardanoPosition as DomainCardanoPosition, ObservedUtxo, TimestampUnixMillis,
-};
+use midnight_primitives_cnight_observation::{CardanoPosition, ObservedUtxo, TimestampUnixMillis};
 use sidechain_domain::*;
 use tonic::Status;
 use tonic::transport::Channel;
 
 pub struct ObservedUtxoEvents {
 	pub utxos: Vec<ObservedUtxo>,
-	pub next_position: DomainCardanoPosition,
+	pub next_position: CardanoPosition,
 }
 
-#[allow(clippy::result_large_err)]
 pub async fn get_utxo_events(
 	client: &mut MidnightStateClient<Channel>,
 	cardano_network: u8,
-	start_position: &DomainCardanoPosition,
+	start_position: &CardanoPosition,
 	tx_capacity: usize,
 	end_block_hash: McBlockHash,
 ) -> Result<ObservedUtxoEvents, Status> {
@@ -57,8 +54,8 @@ pub async fn get_utxo_events(
 #[allow(clippy::result_large_err)]
 fn cardano_position_from_response(
 	position: GrpcCardanoPosition,
-) -> Result<DomainCardanoPosition, Status> {
-	Ok(DomainCardanoPosition {
+) -> Result<CardanoPosition, Status> {
+	Ok(CardanoPosition {
 		block_hash: McBlockHash(
 			position
 				.block_hash
