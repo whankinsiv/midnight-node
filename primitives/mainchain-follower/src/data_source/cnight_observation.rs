@@ -84,7 +84,7 @@ pub enum RegistrationDatumDecodeError {
 	DustAddressInvalidLength(usize),
 }
 
-#[derive(new)]
+#[derive(new, Clone)]
 pub struct MidnightCNightObservationDataSourceImpl {
 	pub pool: PgPool,
 	pub metrics_opt: Option<McFollowerMetrics>,
