@@ -1,25 +1,28 @@
 use crate::grpc::conversions::observed_utxo_from_event;
 use crate::grpc::midnight_state::{
-	CardanoPosition as CardanoPositionProto, UtxoEventsRequest,
+	CardanoPosition as GrpcCardanoPosition, UtxoEventsRequest,
 	midnight_state_client::MidnightStateClient,
 };
-use midnight_primitives_cnight_observation::{CardanoPosition, ObservedUtxo, TimestampUnixMillis};
+use midnight_primitives_cnight_observation::{
+	CardanoPosition as DomainCardanoPosition, ObservedUtxo, TimestampUnixMillis,
+};
 use sidechain_domain::*;
 use tonic::Status;
 use tonic::transport::Channel;
 
-pub struct UtxoEventsResult {
-	pub events: Vec<ObservedUtxo>,
-	pub next_position: CardanoPosition,
+pub struct ObservedUtxoEvents {
+	pub utxos: Vec<ObservedUtxo>,
+	pub next_position: DomainCardanoPosition,
 }
 
+#[allow(clippy::result_large_err)]
 pub async fn get_utxo_events(
 	client: &mut MidnightStateClient<Channel>,
 	cardano_network: u8,
-	start_position: &CardanoPosition,
-	end_block_hash: McBlockHash,
+	start_position: &DomainCardanoPosition,
 	tx_capacity: usize,
-) -> Result<UtxoEventsResult, Status> {
+	end_block_hash: McBlockHash,
+) -> Result<ObservedUtxoEvents, Status> {
 	let tx_capacity = u32::try_from(tx_capacity)
 		.map_err(|_| tonic::Status::invalid_argument("utxo_capacity too large"))?;
 
@@ -27,7 +30,7 @@ pub async fn get_utxo_events(
 		.get_utxo_events(UtxoEventsRequest {
 			tx_capacity,
 			end_block_hash: end_block_hash.0.to_vec(),
-			start_position: Some(CardanoPositionProto {
+			start_position: Some(GrpcCardanoPosition {
 				block_hash: start_position.block_hash.0.to_vec(),
 				block_number: start_position.block_number,
 				tx_index: start_position.tx_index_in_block,
@@ -37,7 +40,7 @@ pub async fn get_utxo_events(
 		.await?
 		.into_inner();
 
-	let events = response
+	let utxos = response
 		.events
 		.into_iter()
 		.map(|e| observed_utxo_from_event(e, cardano_network))
@@ -45,19 +48,25 @@ pub async fn get_utxo_events(
 
 	let next_position = response
 		.next_position
-		.ok_or_else(|| tonic::Status::internal("missing next_position"))?;
-	let next_block_hash: [u8; 32] = next_position
-		.block_hash
-		.try_into()
-		.map_err(|_| Status::internal("invalid hash length"))?;
+		.ok_or_else(|| Status::internal("missing next_position in UtxoEventsResponse"))
+		.and_then(cardano_position_from_response)?;
 
-	Ok(UtxoEventsResult {
-		events,
-		next_position: CardanoPosition {
-			block_hash: McBlockHash(next_block_hash),
-			block_number: next_position.block_number,
-			block_timestamp: TimestampUnixMillis(next_position.block_timestamp_unix_millis),
-			tx_index_in_block: next_position.tx_index,
-		},
+	Ok(ObservedUtxoEvents { utxos, next_position })
+}
+
+#[allow(clippy::result_large_err)]
+fn cardano_position_from_response(
+	position: GrpcCardanoPosition,
+) -> Result<DomainCardanoPosition, Status> {
+	Ok(DomainCardanoPosition {
+		block_hash: McBlockHash(
+			position
+				.block_hash
+				.try_into()
+				.map_err(|_| Status::internal("invalid block hash length in next_position"))?,
+		),
+		block_number: position.block_number,
+		block_timestamp: TimestampUnixMillis(position.block_timestamp_unix_millis),
+		tx_index_in_block: position.tx_index,
 	})
 }

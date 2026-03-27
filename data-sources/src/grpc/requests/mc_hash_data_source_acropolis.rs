@@ -7,6 +7,7 @@ use crate::grpc::midnight_state::{
 	BlockByHashRequest, LatestStableBlockRequest, StableBlockRequest,
 };
 
+#[allow(clippy::result_large_err)]
 pub(crate) async fn get_latest_stable_block(
 	client: &mut MidnightStateClient<Channel>,
 	stability_offset: u32,
@@ -33,6 +34,8 @@ pub(crate) async fn get_latest_stable_block(
 		})
 		.transpose()
 }
+
+#[allow(clippy::result_large_err)]
 pub(crate) async fn get_stable_block(
 	client: &mut MidnightStateClient<Channel>,
 	hash: McBlockHash,
