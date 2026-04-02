@@ -54,7 +54,8 @@ mod tests {
 		grpc::midnight_state::{
 			AriadneParametersRequest, AriadneParametersResponse, AssetCreatesRequest,
 			AssetCreatesResponse, AssetSpendsRequest, AssetSpendsResponse, BlockByHashRequest,
-			BlockByHashResponse, CouncilDatumRequest, CouncilDatumResponse, DeregistrationsRequest,
+			BlockByHashResponse, BridgeTransfersRequest, BridgeTransfersResponse,
+			CouncilDatumRequest, CouncilDatumResponse, DeregistrationsRequest,
 			DeregistrationsResponse, EpochCandidatesRequest, EpochCandidatesResponse,
 			EpochNonceRequest, EpochNonceResponse, LatestBlockRequest, LatestBlockResponse,
 			LatestStableBlockRequest, LatestStableBlockResponse, RegistrationsRequest,
@@ -95,6 +96,13 @@ mod tests {
 			&self,
 			_request: Request<AssetSpendsRequest>,
 		) -> Result<Response<AssetSpendsResponse>, Status> {
+			Err(Status::unimplemented("not used in tests"))
+		}
+
+		async fn get_bridge_transfers(
+			&self,
+			_request: Request<BridgeTransfersRequest>,
+		) -> Result<Response<BridgeTransfersResponse>, Status> {
 			Err(Status::unimplemented("not used in tests"))
 		}
 

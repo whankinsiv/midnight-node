@@ -19,6 +19,7 @@ pallet-sidechain-rpc = { workspace = true }
 sidechain-mc-hash = { workspace = true }
 sidechain-domain = { workspace = true }
 partner-chains-plutus-data = { workspace = true }
+sp-partner-chains-bridge = { workspace = true }
 
 # substrate
 sp-core = { workspace = true }
@@ -38,7 +39,6 @@ prost = { version = "0.13", optional = true }
 
 [build-dependencies]
 tonic-build = "0.12"
-protoc-bin-vendored = "3"
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["async_tokio"] }
@@ -62,6 +62,7 @@ std = [
     "midnight-primitives-federated-authority-observation/std",
     "authority-selection-inherents/std",
     "sidechain-domain/std",
+    "sp-partner-chains-bridge/std",
     "sp-core/std",
     "sp-timestamp/std",
     "log/std",

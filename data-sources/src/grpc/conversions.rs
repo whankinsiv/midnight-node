@@ -15,11 +15,14 @@ use sidechain_domain::{
 	CandidateKeys, CrossChainPublicKey, CrossChainSignature, MainchainKeyHash, McBlockHash,
 	McTxHash, PolicyId, StakeDelegation, StakePoolPublicKey, UtxoId, UtxoIndex, UtxoInfo,
 };
+use sp_partner_chains_bridge::{BridgeDataCheckpoint, BridgeTransferV1};
 use std::{collections::HashMap, convert::TryFrom};
 use tonic::Status;
 
 use crate::grpc::midnight_state::{
-	EpochCandidate, StakePoolEntry, UtxoEvent, UtxoId as UtxoIdProto, utxo_event::Kind,
+	BridgeCheckpoint, BridgeTransfer, EpochCandidate, StakePoolEntry, UserBridgeTransfer,
+	UtxoEvent, UtxoId as UtxoIdProto, bridge_checkpoint, bridge_transfer, bridge_transfers_request,
+	utxo_event::Kind,
 };
 
 #[derive(Debug)]
@@ -28,6 +31,84 @@ pub enum CandidateConversionError {
 	InvalidDatum,
 	InvalidHashLength,
 	InvalidIndex,
+}
+
+#[allow(clippy::result_large_err)]
+pub fn bridge_checkpoint_to_proto(
+	checkpoint: BridgeDataCheckpoint,
+) -> Result<bridge_transfers_request::Checkpoint, Status> {
+	match checkpoint {
+		BridgeDataCheckpoint::Block(block_number) => {
+			Ok(bridge_transfers_request::Checkpoint::BlockNumber(u64::from(block_number.0)))
+		},
+		BridgeDataCheckpoint::Utxo(utxo) => {
+			Ok(bridge_transfers_request::Checkpoint::Utxo(UtxoIdProto {
+				tx_hash: utxo.tx_hash.0.to_vec(),
+				index: u32::from(utxo.index.0),
+			}))
+		},
+	}
+}
+
+#[allow(clippy::result_large_err)]
+pub fn bridge_checkpoint_from_proto(
+	checkpoint: BridgeCheckpoint,
+) -> Result<BridgeDataCheckpoint, Status> {
+	match checkpoint.kind {
+		Some(bridge_checkpoint::Kind::BlockNumber(block_number)) => {
+			let block_number = u32::try_from(block_number)
+				.map_err(|_| Status::internal("bridge checkpoint block number overflow"))?;
+			Ok(BridgeDataCheckpoint::Block(sidechain_domain::McBlockNumber(block_number)))
+		},
+		Some(bridge_checkpoint::Kind::Utxo(utxo)) => {
+			Ok(BridgeDataCheckpoint::Utxo(bridge_utxo_id_from_proto(utxo)?))
+		},
+		None => Err(Status::internal("BridgeCheckpoint missing kind")),
+	}
+}
+
+#[allow(clippy::result_large_err)]
+pub fn bridge_transfer_from_proto<RecipientAddress>(
+	transfer: BridgeTransfer,
+) -> Result<Option<BridgeTransferV1<RecipientAddress>>, Status>
+where
+	RecipientAddress: for<'a> TryFrom<&'a [u8]>,
+{
+	let kind = transfer.kind.ok_or_else(|| Status::internal("missing bridge transfer kind"))?;
+
+	let transfer = match kind {
+		bridge_transfer::Kind::Invalid(invalid) => {
+			let utxo = invalid
+				.utxo
+				.ok_or_else(|| Status::internal("missing invalid bridge transfer utxo"))?;
+			BridgeTransferV1::InvalidTransfer {
+				token_amount: invalid.token_amount,
+				utxo_id: bridge_utxo_id_from_proto(utxo)?,
+			}
+		},
+		bridge_transfer::Kind::User(UserBridgeTransfer { token_amount, recipient, utxo }) => {
+			let utxo_id = bridge_utxo_id_from_proto(
+				utxo.ok_or_else(|| Status::internal("missing user bridge transfer utxo"))?,
+			)?;
+			match RecipientAddress::try_from(recipient.as_ref()) {
+				Ok(recipient) => BridgeTransferV1::UserTransfer { token_amount, recipient },
+				Err(_) => BridgeTransferV1::InvalidTransfer { token_amount, utxo_id },
+			}
+		},
+		bridge_transfer::Kind::Reserve(reserve) => {
+			BridgeTransferV1::ReserveTransfer { token_amount: reserve.token_amount }
+		},
+	};
+
+	Ok(Some(transfer))
+}
+
+#[allow(clippy::result_large_err)]
+pub fn bridge_utxo_id_from_proto(utxo: UtxoIdProto) -> Result<UtxoId, Status> {
+	let index =
+		u16::try_from(utxo.index).map_err(|_| Status::internal("bridge utxo index overflow"))?;
+
+	Ok(UtxoId { tx_hash: McTxHash(hash32(utxo.tx_hash)?), index: UtxoIndex(index) })
 }
 
 #[allow(clippy::result_large_err)]
