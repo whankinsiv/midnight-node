@@ -1,6 +1,7 @@
 use midnight_node_e2e::api::cardano::CardanoClient;
 use midnight_node_e2e::api::midnight::MidnightClient;
 use midnight_node_e2e::config::{self, Settings};
+use midnight_node_e2e::e2e_test;
 use midnight_node_e2e::faucet::FaucetManager;
 use midnight_node_metadata::midnight_metadata_latest::c_night_observation;
 use midnight_node_metadata::midnight_metadata_latest::c_night_observation::events::{
@@ -71,20 +72,21 @@ async fn global_faucet_manager() -> Arc<FaucetManager> {
 
 // -------- TESTS --------
 
-#[tokio::test]
+#[e2e_test]
 async fn register_for_dust_production() {
     let settings = Settings::default();
     let cardano_client = CardanoClient::new(settings.ogmios_client, settings.constants).await;
     let midnight_client = MidnightClient::new(settings.node_client).await;
     let address_bech32 = cardano_client.address_as_bech32();
-    println!("New Cardano wallet created: {:?}", address_bech32);
+    tracing::info!("New Cardano wallet created: {:?}", address_bech32);
 
     let midnight_wallet_seed = MidnightClient::new_seed();
     let dust_hex = MidnightClient::new_dust_hex(midnight_wallet_seed);
     let dust_bytes: Vec<u8> = hex::decode(&dust_hex).unwrap().try_into().unwrap();
-    println!(
+    tracing::info!(
         "Registering Cardano wallet {} with DUST address {}",
-        address_bech32, dust_hex
+        address_bech32,
+        dust_hex
     );
 
     let faucet = global_faucet_manager().await;
@@ -104,7 +106,7 @@ async fn register_for_dust_production() {
         .expect("Failed to register transaction")
         .transaction
         .id;
-    println!(
+    tracing::info!(
         "Registration transaction submitted with hash: {}",
         hex::encode(register_tx_id)
     );
@@ -131,7 +133,7 @@ async fn register_for_dust_production() {
         registration.is_some(),
         "Did not find registration event with expected reward_address and dust_address"
     );
-    println!(
+    tracing::info!(
         "Matching Registration event found: {:?}",
         registration.unwrap()
     );
@@ -149,7 +151,7 @@ async fn register_for_dust_production() {
         mapping_added.is_some(),
         "Did not find MappingAdded event with expected reward_address, dust_address, and utxo_id"
     );
-    println!(
+    tracing::info!(
         "Matching MappingAdded event found: {:?}",
         mapping_added.unwrap()
     );
@@ -162,9 +164,9 @@ async fn register_for_dust_production() {
 /// 1. Council Forever contract exists at the expected address with NFT
 /// 2. Technical Authority Forever contract exists at the expected address with NFT
 /// 3. Midnight blockchain emits membership reset events for the deployed contracts
-#[tokio::test]
+#[e2e_test]
 async fn verify_governance_contracts_and_validate_membership_reset() {
-    println!("=== Verifying Governance Contracts Deployed by midnight-setup ===");
+    tracing::info!("=== Verifying Governance Contracts Deployed by midnight-setup ===");
 
     let settings = Settings::default();
 
@@ -179,16 +181,16 @@ async fn verify_governance_contracts_and_validate_membership_reset() {
     let tech_auth_address = config::tech_auth_forever_address();
     let tech_auth_policy_id = config::tech_auth_forever_policy_id();
 
-    println!("Council Forever:");
-    println!("  Policy ID (expected): {}", council_policy_id);
-    println!("  Address: {}", council_address);
+    tracing::info!("Council Forever:");
+    tracing::info!("  Policy ID (expected): {}", council_policy_id);
+    tracing::info!("  Address: {}", council_address);
 
-    println!("Technical Authority Forever:");
-    println!("  Policy ID (expected): {}", tech_auth_policy_id);
-    println!("  Address: {}", tech_auth_address);
+    tracing::info!("Technical Authority Forever:");
+    tracing::info!("  Policy ID (expected): {}", tech_auth_policy_id);
+    tracing::info!("  Address: {}", tech_auth_address);
 
     // Query UTxOs at council contract address to verify deployment
-    println!("\n=== Verifying Council Forever Contract ===");
+    tracing::info!("\n=== Verifying Council Forever Contract ===");
     let council_utxos = cardano_client.query_utxos(&council_address).await;
     assert!(
         !council_utxos.is_empty(),
@@ -208,10 +210,10 @@ async fn verify_governance_contracts_and_validate_membership_reset() {
         "Council Forever contract NFT with policy {} not found",
         council_policy_id
     );
-    println!("✓ Council Forever contract verified at {}", council_address);
+    tracing::info!("✓ Council Forever contract verified at {}", council_address);
 
     // Query UTxOs at tech auth contract address to verify deployment
-    println!("\n=== Verifying Technical Authority Forever Contract ===");
+    tracing::info!("\n=== Verifying Technical Authority Forever Contract ===");
     let tech_auth_utxos = cardano_client.query_utxos(&tech_auth_address).await;
     assert!(
         !tech_auth_utxos.is_empty(),
@@ -231,16 +233,16 @@ async fn verify_governance_contracts_and_validate_membership_reset() {
         "Technical Authority Forever contract NFT with policy {} not found",
         tech_auth_policy_id
     );
-    println!(
+    tracing::info!(
         "✓ Technical Authority Forever contract verified at {}",
         tech_auth_address
     );
 
-    println!("\n=== Both Governance Contracts Verified Successfully ===");
-    println!("Waiting for Midnight blockchain to emit membership reset events...\n");
+    tracing::info!("\n=== Both Governance Contracts Verified Successfully ===");
+    tracing::info!("Waiting for Midnight blockchain to emit membership reset events...\n");
 
     // Subscribe to federated authority observation events with timeout
-    println!("Subscribing to federated authority events (timeout: 30 seconds)...");
+    tracing::info!("Subscribing to federated authority events (timeout: 30 seconds)...");
 
     let events_result = timeout(
         Duration::from_secs(30),
@@ -250,16 +252,18 @@ async fn verify_governance_contracts_and_validate_membership_reset() {
 
     match events_result {
         Ok(Ok(_)) => {
-            println!("Successfully received federated authority events");
+            tracing::info!("Successfully received federated authority events");
         }
         Ok(Err(e)) => {
-            println!("\n=== Governance Contracts Verification PARTIAL SUCCESS ===");
-            println!("Contracts verified on-chain, but event subscription failed.");
+            tracing::info!("\n=== Governance Contracts Verification PARTIAL SUCCESS ===");
+            tracing::info!("Contracts verified on-chain, but event subscription failed.");
             panic!("⚠ Failed to receive federated authority events: {}", e);
         }
         Err(_) => {
-            println!("\n=== Governance Contracts Verification PARTIAL SUCCESS ===");
-            println!("Contracts verified on-chain, but events were not received within timeout.");
+            tracing::info!("\n=== Governance Contracts Verification PARTIAL SUCCESS ===");
+            tracing::info!(
+                "Contracts verified on-chain, but events were not received within timeout."
+            );
             panic!("⚠ Timeout waiting for federated authority events (30 seconds elapsed)");
         }
     }
@@ -270,9 +274,9 @@ async fn verify_governance_contracts_and_validate_membership_reset() {
 /// This test verifies:
 /// 1. Federated Operators Forever contract exists at the expected address
 /// 2. The contract NFT was minted with the expected policy ID
-#[tokio::test]
+#[e2e_test]
 async fn verify_federated_ops_contract_deployment() {
-    println!("=== Verifying Federated Operators Contract Deployed by midnight-setup ===");
+    tracing::info!("=== Verifying Federated Operators Contract Deployed by midnight-setup ===");
 
     let settings = Settings::default();
 
@@ -283,12 +287,12 @@ async fn verify_federated_ops_contract_deployment() {
     let federated_ops_address = config::federated_ops_forever_address();
     let federated_ops_policy_id = config::federated_ops_forever_policy_id();
 
-    println!("Federated Operators Forever:");
-    println!("  Policy ID (expected): {}", federated_ops_policy_id);
-    println!("  Address: {}", federated_ops_address);
+    tracing::info!("Federated Operators Forever:");
+    tracing::info!("  Policy ID (expected): {}", federated_ops_policy_id);
+    tracing::info!("  Address: {}", federated_ops_address);
 
     // Query UTxOs at federated ops contract address to verify deployment
-    println!("\n=== Verifying Federated Operators Forever Contract ===");
+    tracing::info!("\n=== Verifying Federated Operators Forever Contract ===");
     let federated_ops_utxos = cardano_client.query_utxos(&federated_ops_address).await;
     assert!(
         !federated_ops_utxos.is_empty(),
@@ -310,14 +314,14 @@ async fn verify_federated_ops_contract_deployment() {
         federated_ops_policy_id
     );
 
-    println!(
+    tracing::info!(
         "✓ Federated Operators Forever contract verified at {}",
         federated_ops_address
     );
-    println!("\n=== Federated Operators Contract Verification Complete ===");
+    tracing::info!("\n=== Federated Operators Contract Verification Complete ===");
 }
 
-#[tokio::test]
+#[e2e_test]
 async fn register_2_cardano_same_dust_address_production() {
     let settings = Settings::default();
     let base_url = settings.node_client.base_url.clone();
@@ -328,19 +332,21 @@ async fn register_2_cardano_same_dust_address_production() {
 
     let address_bech_32_1 = cardano_client_1.address_as_bech32();
     let address_bech_32_2 = cardano_client_2.address_as_bech32();
-    println!("First Cardano wallet created: {:?}", address_bech_32_1);
-    println!("Second Cardano wallet created: {:?}", address_bech_32_2);
+    tracing::info!("First Cardano wallet created: {:?}", address_bech_32_1);
+    tracing::info!("Second Cardano wallet created: {:?}", address_bech_32_2);
 
     let midnight_wallet_seed = MidnightClient::new_seed();
     let dust_hex = MidnightClient::new_dust_hex(midnight_wallet_seed.clone());
     let dust_bytes: [u8; 33] = hex::decode(&dust_hex).unwrap().try_into().unwrap();
-    println!(
+    tracing::info!(
         "Registering First Cardano wallet {} with DUST address {}",
-        address_bech_32_1, dust_hex
+        address_bech_32_1,
+        dust_hex
     );
-    println!(
+    tracing::info!(
         "Registering Second Cardano wallet {} with DUST address {}",
-        address_bech_32_2, dust_hex
+        address_bech_32_2,
+        dust_hex
     );
 
     let faucet = global_faucet_manager().await;
@@ -369,7 +375,7 @@ async fn register_2_cardano_same_dust_address_production() {
         .expect("Failed to register")
         .transaction
         .id;
-    println!(
+    tracing::info!(
         "Registration transaction for the first cardano submitted with hash: {}",
         hex::encode(register_tx_id_1)
     );
@@ -380,7 +386,7 @@ async fn register_2_cardano_same_dust_address_production() {
         .expect("Failed to register")
         .transaction
         .id;
-    println!(
+    tracing::info!(
         "Registration transaction for second cardano submitted with hash: {}",
         hex::encode(register_tx_id_2)
     );
@@ -430,12 +436,12 @@ async fn register_2_cardano_same_dust_address_production() {
         "Did not find second registration event with expected second reward_address and dust_address"
     );
 
-    println!(
+    tracing::info!(
         "Matching Registration event found: {:?}",
         registration_1.unwrap()
     );
 
-    println!(
+    tracing::info!(
         "Matching Second Registration event found: {:?}",
         registration_2.unwrap()
     );
@@ -468,12 +474,12 @@ async fn register_2_cardano_same_dust_address_production() {
         "Did not find second MappingAdded event with expected second_reward_address, dust_address, and utxo_id"
     );
 
-    println!(
+    tracing::info!(
         "Matching first MappingAdded event found: {:?}",
         mapping_added_1.unwrap()
     );
 
-    println!(
+    tracing::info!(
         "Matching second MappingAdded event found: {:?}",
         mapping_added_2.unwrap()
     );
@@ -485,7 +491,7 @@ async fn register_2_cardano_same_dust_address_production() {
         .expect("Failed to mint tokens")
         .transaction
         .id;
-    println!("Minted {} cNIGHT. Tx: {}", amount, hex::encode(tx_id));
+    tracing::info!("Minted {} cNIGHT. Tx: {}", amount, hex::encode(tx_id));
 
     // FIXME: it returns first utxo, find by native token or return all utxos
     let cnight_utxo = match cardano_client_1
@@ -499,7 +505,7 @@ async fn register_2_cardano_same_dust_address_production() {
     let prefix = b"asset_create";
     let nonce =
         MidnightClient::calculate_nonce(prefix, cnight_utxo.transaction.id, cnight_utxo.index);
-    println!("Calculated nonce for cNIGHT UTXO: {}", nonce);
+    tracing::info!("Calculated nonce for cNIGHT UTXO: {}", nonce);
 
     let nonce_for_check = nonce.clone();
 
@@ -510,7 +516,7 @@ async fn register_2_cardano_same_dust_address_production() {
         .expect("Failed to mint tokens")
         .transaction
         .id;
-    println!("Minted {} cNIGHT. Tx: {}", amount, hex::encode(tx_id2));
+    tracing::info!("Minted {} cNIGHT. Tx: {}", amount, hex::encode(tx_id2));
 
     // FIXME: it returns first utxo, find by native token or return all utxos
     let cnight_utxo2 = match cardano_client_2
@@ -524,7 +530,7 @@ async fn register_2_cardano_same_dust_address_production() {
     let prefix2 = b"asset_create";
     let nonce2 =
         MidnightClient::calculate_nonce(prefix2, cnight_utxo2.transaction.id, cnight_utxo2.index);
-    println!("Calculated nonce for cNIGHT UTXO: {}", nonce2);
+    tracing::info!("Calculated nonce for cNIGHT UTXO: {}", nonce2);
 
     let nonce2_for_check = nonce2.clone();
 
@@ -532,10 +538,10 @@ async fn register_2_cardano_same_dust_address_production() {
         .poll_utxo_owners_until_change(nonce, None, 60, 1000)
         .await
         .expect("Failed to poll UTXO owners");
-    println!("Queried UTXO owners from Midnight node: {:?}", utxo_owner);
+    tracing::info!("Queried UTXO owners from Midnight node: {:?}", utxo_owner);
 
     let utxo_owner_hex = hex::encode(utxo_owner.unwrap().0.0);
-    println!("UTXO owner in hex: {:?}", utxo_owner_hex);
+    tracing::info!("UTXO owner in hex: {:?}", utxo_owner_hex);
     assert_eq!(
         utxo_owner_hex, dust_hex,
         "UTXO owner does not match DUST address"
@@ -563,7 +569,7 @@ async fn register_2_cardano_same_dust_address_production() {
 
     let mut balance: &u128 = &0;
     if let DustBalanceResult::Json(DustBalanceJson { total, .. }) = &result {
-        println!("Total dust balance: {}", total);
+        tracing::info!("Total dust balance: {}", total);
         balance = total;
     }
 
@@ -572,9 +578,9 @@ async fn register_2_cardano_same_dust_address_production() {
     let mut sources: HashMap<String, u128> = HashMap::new();
 
     if let DustBalanceResult::Json(DustBalanceJson { source, .. }) = &result {
-        println!("Sources ({}):", source.len());
+        tracing::info!("Sources ({}):", source.len());
         for (k, v) in source.iter() {
-            println!("  {} => {}", k, v);
+            tracing::info!("  {} => {}", k, v);
         }
         sources = source.clone();
     }
@@ -598,24 +604,25 @@ async fn register_2_cardano_same_dust_address_production() {
     }
 }
 
-#[tokio::test]
+#[e2e_test]
 async fn cnight_produces_dust() {
     let settings = Settings::default();
     let cardano_client = CardanoClient::new(settings.ogmios_client, settings.constants).await;
     let midnight_client = MidnightClient::new(settings.node_client.clone()).await;
 
     let bech32_address = cardano_client.address_as_bech32();
-    println!("New Cardano wallet created: {:?}", bech32_address);
+    tracing::info!("New Cardano wallet created: {:?}", bech32_address);
 
     let midnight_wallet_seed = MidnightClient::new_seed();
-    println!(
+    tracing::info!(
         "Midnight wallet seed: {}",
         hex::encode(midnight_wallet_seed.as_bytes())
     );
     let dust_hex = MidnightClient::new_dust_hex(midnight_wallet_seed.clone());
-    println!(
+    tracing::info!(
         "Registering Cardano wallet {} with DUST address {}",
-        bech32_address, dust_hex
+        bech32_address,
+        dust_hex
     );
 
     let faucet = global_faucet_manager().await;
@@ -628,7 +635,7 @@ async fn cnight_produces_dust() {
         .expect("Failed to register tx")
         .transaction
         .id;
-    println!(
+    tracing::info!(
         "Registration transaction submitted with hash: {}",
         hex::encode(register_tx_id)
     );
@@ -650,7 +657,7 @@ async fn cnight_produces_dust() {
         .expect("Failed to mint tokens")
         .transaction
         .id;
-    println!("Minted {} cNIGHT. Tx: {}", amount, hex::encode(tx_id));
+    tracing::info!("Minted {} cNIGHT. Tx: {}", amount, hex::encode(tx_id));
 
     // FIXME: it returns first utxo, find by native token or return all utxos
     let cnight_utxo = match cardano_client
@@ -664,16 +671,16 @@ async fn cnight_produces_dust() {
     let prefix = b"asset_create";
     let nonce =
         MidnightClient::calculate_nonce(prefix, cnight_utxo.transaction.id, cnight_utxo.index);
-    println!("Calculated nonce for cNIGHT UTXO: {}", nonce);
+    tracing::info!("Calculated nonce for cNIGHT UTXO: {}", nonce);
 
     let utxo_owner = midnight_client
         .poll_utxo_owners_until_change(nonce, None, 60, 1000)
         .await
         .expect("Failed to poll UTXO owners");
-    println!("Queried UTXO owners from Midnight node: {:?}", utxo_owner);
+    tracing::info!("Queried UTXO owners from Midnight node: {:?}", utxo_owner);
 
     let utxo_owner_hex = hex::encode(utxo_owner.unwrap().0.0);
-    println!("UTXO owner in hex: {:?}", utxo_owner_hex);
+    tracing::info!("UTXO owner in hex: {:?}", utxo_owner_hex);
     assert_eq!(
         utxo_owner_hex, dust_hex,
         "UTXO owner does not match DUST address"
@@ -701,7 +708,7 @@ async fn cnight_produces_dust() {
 
     let mut balance: &u128 = &0;
     if let DustBalanceResult::Json(DustBalanceJson { total, .. }) = &result {
-        println!("Total dust balance: {}", total);
+        tracing::info!("Total dust balance: {}", total);
         balance = total;
     }
 
@@ -728,7 +735,7 @@ async fn cnight_produces_dust() {
         .expect("dust-balance error");
 
     if let DustBalanceResult::Json(DustBalanceJson { total, .. }) = &result2 {
-        println!("Total dust balance: {}", total);
+        tracing::info!("Total dust balance: {}", total);
     }
 
     assert!(
@@ -736,21 +743,22 @@ async fn cnight_produces_dust() {
     );
 }
 
-#[tokio::test]
+#[e2e_test]
 async fn deregister_from_dust_production() {
     let settings = Settings::default();
     let cardano_client = CardanoClient::new(settings.ogmios_client, settings.constants).await;
     let midnight_client = MidnightClient::new(settings.node_client.clone()).await;
 
     let address_bech32 = cardano_client.address_as_bech32();
-    println!("New Cardano wallet created: {:?}", address_bech32);
+    tracing::info!("New Cardano wallet created: {:?}", address_bech32);
 
     let midnight_wallet_seed = MidnightClient::new_seed();
     let dust_hex = MidnightClient::new_dust_hex(midnight_wallet_seed.clone());
     let dust_bytes: Vec<u8> = hex::decode(&dust_hex).unwrap().try_into().unwrap();
-    println!(
+    tracing::info!(
         "Registering Cardano wallet {} with DUST address {}",
-        address_bech32, dust_hex
+        address_bech32,
+        dust_hex
     );
 
     let faucet = global_faucet_manager().await;
@@ -763,7 +771,7 @@ async fn deregister_from_dust_production() {
         .expect("Failed to register")
         .transaction
         .id;
-    println!(
+    tracing::info!(
         "Registration transaction submitted with hash: {}",
         hex::encode(register_tx_id)
     );
@@ -773,7 +781,7 @@ async fn deregister_from_dust_production() {
         .find_utxo_by_tx_id(&validator_address, hex::encode(register_tx_id))
         .await
         .expect("No registration UTXO found after registering");
-    println!("Found registration UTXO: {:?}", register_tx);
+    tracing::info!("Found registration UTXO: {:?}", register_tx);
 
     let utxos = cardano_client.utxos().await;
     assert!(!utxos.is_empty(), "No UTXOs found for funding address");
@@ -788,7 +796,7 @@ async fn deregister_from_dust_production() {
         .expect("Failed to deregister")
         .transaction
         .id;
-    println!(
+    tracing::info!(
         "Deregistration transaction submitted with hash: {}",
         hex::encode(deregister_tx)
     );
@@ -818,7 +826,7 @@ async fn deregister_from_dust_production() {
         deregistration.is_some(),
         "Did not find deregistration event with expected reward_address and dust_address"
     );
-    println!(
+    tracing::info!(
         "Matching Deregistration event found: {:?}",
         deregistration.unwrap()
     );
@@ -839,7 +847,7 @@ async fn deregister_from_dust_production() {
         mapping_removed.is_some(),
         "Did not find MappingRemoved event with expected reward_address, dust_address, and utxo_id"
     );
-    println!(
+    tracing::info!(
         "Matching MappingRemoved event found: {:?}",
         mapping_removed.unwrap()
     );
@@ -865,13 +873,13 @@ async fn deregister_from_dust_production() {
         .expect("dust-balance error");
 
     if let DustBalanceResult::Json(DustBalanceJson { total, .. }) = &result {
-        println!("Total dust balance: {}", total);
+        tracing::info!("Total dust balance: {}", total);
     }
 
     assert!(matches!(result, DustBalanceResult::Json(DustBalanceJson{total, ..}) if total == 0));
 }
 
-#[tokio::test]
+#[e2e_test]
 async fn alice_cannot_deregister_bob() {
     let settings = Settings::default();
 
@@ -895,9 +903,10 @@ async fn alice_cannot_deregister_bob() {
     let register_tx_in = faucet.request_tokens(&bob_bech32, 10_000_000).await;
 
     // Bob registers his DUST address
-    println!(
+    tracing::info!(
         "Registering Bob wallet {} with DUST address {}",
-        bob_bech32, dust_hex
+        bob_bech32,
+        dust_hex
     );
     let register_tx_id = bob
         .register(&dust_hex, &register_tx_in, &bob_collateral)
@@ -905,7 +914,7 @@ async fn alice_cannot_deregister_bob() {
         .expect("Failed to register")
         .transaction
         .id;
-    println!(
+    tracing::info!(
         "Registration transaction submitted with hash: {}",
         hex::encode(register_tx_id)
     );
@@ -916,7 +925,7 @@ async fn alice_cannot_deregister_bob() {
         .find_utxo_by_tx_id(&validator_address, hex::encode(register_tx_id))
         .await
         .expect("No registration UTXO found after registering");
-    println!("Found registration UTXO: {:?}", register_tx);
+    tracing::info!("Found registration UTXO: {:?}", register_tx);
 
     // Alice attempts to deregister Bob
     let deregister_tx = alice
@@ -937,26 +946,28 @@ async fn alice_cannot_deregister_bob() {
     );
 }
 
-#[tokio::test]
+#[e2e_test]
 async fn removing_excessive_registrations() {
     let settings = Settings::default();
     let cardano_client = CardanoClient::new(settings.ogmios_client, settings.constants).await;
     let midnight_client = MidnightClient::new(settings.node_client).await;
     let address_bech32 = cardano_client.address_as_bech32();
-    println!("New Cardano wallet created: {:?}", address_bech32);
+    tracing::info!("New Cardano wallet created: {:?}", address_bech32);
 
     let midnight_wallet_seed = MidnightClient::new_seed();
     let dust_hex = MidnightClient::new_dust_hex(midnight_wallet_seed);
-    println!(
+    tracing::info!(
         "Registering Cardano wallet {} with DUST address {}",
-        address_bech32, dust_hex
+        address_bech32,
+        dust_hex
     );
 
     let second_midnight_wallet_seed = MidnightClient::new_seed();
     let second_dust_hex = MidnightClient::new_dust_hex(second_midnight_wallet_seed);
-    println!(
+    tracing::info!(
         "Registering Cardano wallet {} with second DUST address {}",
-        address_bech32, second_dust_hex
+        address_bech32,
+        second_dust_hex
     );
 
     let faucet = global_faucet_manager().await;
@@ -978,7 +989,7 @@ async fn removing_excessive_registrations() {
         .expect("Failed to register transaction")
         .transaction
         .id;
-    println!(
+    tracing::info!(
         "Registration transaction submitted with hash: {}",
         hex::encode(register_tx_id)
     );
@@ -1009,7 +1020,7 @@ async fn removing_excessive_registrations() {
         registration.is_some(),
         "Did not find registration event with expected reward_address and dust_address"
     );
-    println!(
+    tracing::info!(
         "Matching Registration event found: {:?}",
         registration.unwrap()
     );
@@ -1027,7 +1038,7 @@ async fn removing_excessive_registrations() {
         mapping_added.is_some(),
         "Did not find MappingAdded event with expected reward_address, dust_address, and utxo_id"
     );
-    println!(
+    tracing::info!(
         "Matching MappingAdded event found: {:?}",
         mapping_added.unwrap()
     );
@@ -1038,7 +1049,7 @@ async fn removing_excessive_registrations() {
         .expect("Failed to register transaction")
         .transaction
         .id;
-    println!(
+    tracing::info!(
         "Second registration transaction submitted with hash: {}",
         hex::encode(second_register_tx_id)
     );
@@ -1061,7 +1072,7 @@ async fn removing_excessive_registrations() {
         second_mapping_added.is_some(),
         "Did not find second MappingAdded event with expected reward_address, second_dust_address, and second_register_tx_id"
     );
-    println!(
+    tracing::info!(
         "Matching second MappingAdded event found: {:?}",
         second_mapping_added.unwrap()
     );
@@ -1081,7 +1092,7 @@ async fn removing_excessive_registrations() {
         deregistration.is_some(),
         "Did not find deregistration event with expected reward_address and dust_address"
     );
-    println!(
+    tracing::info!(
         "Matching Deregistration event found: {:?}",
         deregistration.unwrap()
     );
@@ -1091,7 +1102,7 @@ async fn removing_excessive_registrations() {
         .find_utxo_by_tx_id(&validator_address, hex::encode(register_tx_id))
         .await
         .expect("No registration UTXO found after registering");
-    println!("Found registration UTXO: {:?}", register_tx);
+    tracing::info!("Found registration UTXO: {:?}", register_tx);
 
     // Deregister the first mapping, so the second mapping should be active from deregistration the first one
     let deregister_tx = cardano_client
@@ -1100,7 +1111,7 @@ async fn removing_excessive_registrations() {
         .expect("Failed to deregister")
         .transaction
         .id;
-    println!(
+    tracing::info!(
         "Deregistration transaction submitted with hash: {}",
         hex::encode(deregister_tx)
     );
@@ -1126,7 +1137,7 @@ async fn removing_excessive_registrations() {
         mapping_removed.is_some(),
         "Did not find MappingRemoved event with expected reward_address, dust_address, and utxo_id"
     );
-    println!(
+    tracing::info!(
         "Matching MappingRemoved event found: {:?}",
         mapping_removed.unwrap()
     );
@@ -1143,7 +1154,7 @@ async fn removing_excessive_registrations() {
         registration_after_removing_excessive_mapping.is_some(),
         "Did not find registration event with expected reward_address and dust_address"
     );
-    println!(
+    tracing::info!(
         "Matching Registration event found: {:?}",
         registration_after_removing_excessive_mapping.unwrap()
     );
@@ -1155,7 +1166,7 @@ async fn removing_excessive_registrations() {
         .expect("Failed to mint tokens")
         .transaction
         .id;
-    println!("Minted {} cNIGHT. Tx: {}", amount, hex::encode(tx_id));
+    tracing::info!("Minted {} cNIGHT. Tx: {}", amount, hex::encode(tx_id));
 
     // FIXME: it returns first utxo, find by native token or return all utxos
     let cnight_utxo = match cardano_client
@@ -1169,29 +1180,29 @@ async fn removing_excessive_registrations() {
     let prefix = b"asset_create";
     let nonce =
         MidnightClient::calculate_nonce(prefix, cnight_utxo.transaction.id, cnight_utxo.index);
-    println!("Calculated nonce for cNIGHT UTXO: {}", nonce);
+    tracing::info!("Calculated nonce for cNIGHT UTXO: {}", nonce);
 
     let utxo_owner = midnight_client
         .poll_utxo_owners_until_change(nonce, None, 60, 1000)
         .await
         .expect("Failed to poll UTXO owners");
-    println!("Queried UTXO owners from Midnight node: {:?}", utxo_owner);
+    tracing::info!("Queried UTXO owners from Midnight node: {:?}", utxo_owner);
 
     let utxo_owner_hex = hex::encode(utxo_owner.unwrap().0.0);
-    println!("UTXO owner in hex: {:?}", utxo_owner_hex);
+    tracing::info!("UTXO owner in hex: {:?}", utxo_owner_hex);
     assert_eq!(
         utxo_owner_hex, second_dust_hex,
         "UTXO owner does not match DUST address"
     );
 }
 
-#[tokio::test]
+#[e2e_test]
 async fn create_hundred_registrations() {
     let settings = Settings::default();
     let cardano_client = CardanoClient::new(settings.ogmios_client, settings.constants).await;
     let midnight_client = MidnightClient::new(settings.node_client).await;
     let address_bech32 = cardano_client.address_as_bech32();
-    println!("New Cardano wallet created: {:?}", address_bech32);
+    tracing::info!("New Cardano wallet created: {:?}", address_bech32);
 
     let faucet = global_faucet_manager().await;
     let collateral_utxo = faucet.request_tokens(&address_bech32, 5_000_000).await;
@@ -1209,9 +1220,10 @@ async fn create_hundred_registrations() {
     for i in 0..101 {
         let midnight_wallet_seed = MidnightClient::new_seed();
         dust_hex = MidnightClient::new_dust_hex(midnight_wallet_seed);
-        println!(
+        tracing::info!(
             "Registering Cardano wallet {} with DUST address {}",
-            address_bech32, dust_hex
+            address_bech32,
+            dust_hex
         );
 
         let register_tx_in = cardano_client
@@ -1228,7 +1240,7 @@ async fn create_hundred_registrations() {
             .expect("Failed to register transaction")
             .transaction
             .id;
-        println!(
+        tracing::info!(
             "Registration transaction submitted with hash: {}",
             hex::encode(register_tx_id[i])
         );
@@ -1240,7 +1252,7 @@ async fn create_hundred_registrations() {
             .await
             .expect("Failed to find UTXO for next registration");
 
-        println!("UTXO for next registration: {:?}", tx_in);
+        tracing::info!("UTXO for next registration: {:?}", tx_in);
     }
 
     //run n-1 deregistrations
@@ -1249,7 +1261,7 @@ async fn create_hundred_registrations() {
             .find_utxo_by_tx_id(&validator_address, hex::encode(register_tx_id[i]))
             .await
             .expect("No registration UTXO found after registering");
-        println!("Found registration UTXO: {:?}", register_tx);
+        tracing::info!("Found registration UTXO: {:?}", register_tx);
 
         let tx_in_for_deregister = cardano_client
             .find_utxo_by_tx_id(
@@ -1265,7 +1277,7 @@ async fn create_hundred_registrations() {
             .expect("Failed to deregister")
             .transaction
             .id;
-        println!(
+        tracing::info!(
             "Deregistration transaction submitted with hash: {}",
             hex::encode(deregister_tx)
         );
@@ -1277,14 +1289,14 @@ async fn create_hundred_registrations() {
             .await
             .expect("Failed to find UTXO for next registration");
 
-        println!("UTXO for next deregistration: {:?}", tx_in);
+        tracing::info!("UTXO for next deregistration: {:?}", tx_in);
         last_deregistration_tx_id = deregister_tx;
     }
 
     //assertions for the last registration
     let reward_address = cardano_client.reward_address_bytes();
-    println!("Reward address hex: {}", hex::encode(&reward_address));
-    println!("DUST address hex: {}", dust_hex);
+    tracing::info!("Reward address hex: {}", hex::encode(&reward_address));
+    tracing::info!("DUST address hex: {}", dust_hex);
     let dust_address: [u8; 33] = hex::decode(&dust_hex)
         .expect("Failed to decode DUST hex")
         .try_into()
@@ -1307,7 +1319,7 @@ async fn create_hundred_registrations() {
         registration.is_some(),
         "Did not find registration event with expected reward_address and dust_address"
     );
-    println!(
+    tracing::info!(
         "Matching Registration event found: {:?}",
         registration.unwrap()
     );
@@ -1324,7 +1336,7 @@ async fn create_hundred_registrations() {
 /// (due to ContractNotPresent) is rejected at the RPC level via pre_dispatch.
 /// This prevents the DDoS attack vector where attackers fill blocks with
 /// failing transactions that don't pay fees.
-#[tokio::test]
+#[e2e_test]
 async fn ddos_attack_transaction_rejected_at_rpc() {
     use midnight_node_res::undeployed::transactions::STORE_TX;
 
@@ -1334,9 +1346,9 @@ async fn ddos_attack_transaction_rejected_at_rpc() {
     // STORE_TX requires the contract to be deployed first.
     // Without DEPLOY_TX, it will fail at pre_dispatch with ContractNotPresent.
     // This simulates an attacker trying to consume blockspace without paying fees.
-    println!("=== PR367-TC-0003-06: DDoS Attack Prevention Test ===");
-    println!("Submitting STORE_TX without prior DEPLOY_TX...");
-    println!("Expected: Transaction rejected at pre_dispatch (ContractNotPresent)");
+    tracing::info!("=== PR367-TC-0003-06: DDoS Attack Prevention Test ===");
+    tracing::info!("Submitting STORE_TX without prior DEPLOY_TX...");
+    tracing::info!("Expected: Transaction rejected at pre_dispatch (ContractNotPresent)");
 
     let result = client.submit_expecting_rejection(STORE_TX.to_vec()).await;
 
@@ -1349,7 +1361,7 @@ async fn ddos_attack_transaction_rejected_at_rpc() {
     );
 
     let error_msg = result.unwrap();
-    println!("✓ Transaction rejected with error: {}", error_msg);
+    tracing::info!("✓ Transaction rejected with error: {}", error_msg);
 
     // The error should indicate an invalid transaction
     // (exact message depends on subxt error formatting)
@@ -1361,22 +1373,24 @@ async fn ddos_attack_transaction_rejected_at_rpc() {
         error_msg
     );
 
-    println!("✓ PR367-TC-0003-06 PASSED: Attack transaction rejected, no blockspace consumed");
+    tracing::info!(
+        "✓ PR367-TC-0003-06 PASSED: Attack transaction rejected, no blockspace consumed"
+    );
 }
 
 /// PR367-TC-0003-06: DDoS Attack Prevention - Batch Attack
 ///
 /// Verifies that multiple attack transactions are all rejected.
 /// Simulates an attacker attempting to flood the network with failing transactions.
-#[tokio::test]
+#[e2e_test]
 async fn ddos_batch_attack_all_rejected() {
     use midnight_node_res::undeployed::transactions::STORE_TX;
 
     let settings = Settings::default();
     let client = MidnightClient::new(settings.node_client).await;
 
-    println!("=== PR367-TC-0003-06: Batch Attack Prevention Test ===");
-    println!("Submitting 5 attack transactions (STORE_TX without DEPLOY_TX)...");
+    tracing::info!("=== PR367-TC-0003-06: Batch Attack Prevention Test ===");
+    tracing::info!("Submitting 5 attack transactions (STORE_TX without DEPLOY_TX)...");
 
     let mut rejected_count = 0;
     let total_attacks = 5;
@@ -1385,9 +1399,9 @@ async fn ddos_batch_attack_all_rejected() {
         let result = client.submit_expecting_rejection(STORE_TX.to_vec()).await;
         if result.is_ok() {
             rejected_count += 1;
-            println!("  Attack tx {}/{} rejected ✓", i + 1, total_attacks);
+            tracing::info!("  Attack tx {}/{} rejected ✓", i + 1, total_attacks);
         } else {
-            println!(
+            tracing::info!(
                 "  Attack tx {}/{} unexpectedly accepted! Error: {:?}",
                 i + 1,
                 total_attacks,
@@ -1404,7 +1418,7 @@ async fn ddos_batch_attack_all_rejected() {
         total_attacks, rejected_count
     );
 
-    println!(
+    tracing::info!(
         "✓ PR367-TC-0003-06 PASSED: All {} attack transactions rejected",
         total_attacks
     );
@@ -1415,25 +1429,25 @@ async fn ddos_batch_attack_all_rejected() {
 /// Verifies that submitting the same transaction twice results in rejection.
 /// The replay protection mechanism should reject the duplicate transaction
 /// at pre_dispatch, preventing replay attacks from consuming blockspace.
-#[tokio::test]
+#[e2e_test]
 async fn replay_attack_rejected_via_rpc() {
     use midnight_node_res::undeployed::transactions::DEPLOY_TX;
 
     let settings = Settings::default();
     let client = MidnightClient::new(settings.node_client).await;
 
-    println!("=== PR367-TC-0003-02 E2E: Replay Attack Prevention Test ===");
+    tracing::info!("=== PR367-TC-0003-02 E2E: Replay Attack Prevention Test ===");
 
     let _deploy_guard = wait_before_deploying().await;
 
     // First submission - may succeed or fail depending on node state
     // (contract may already be deployed from previous test runs)
-    println!("Submitting DEPLOY_TX (first attempt)...");
+    tracing::info!("Submitting DEPLOY_TX (first attempt)...");
     let first_result = client.submit_midnight_tx(DEPLOY_TX.to_vec()).await;
 
     match &first_result {
-        Ok(_) => println!("  First submission accepted (contract not yet deployed)"),
-        Err(e) => println!(
+        Ok(_) => tracing::info!("  First submission accepted (contract not yet deployed)"),
+        Err(e) => tracing::info!(
             "  First submission rejected (expected if contract exists): {}",
             e
         ),
@@ -1441,32 +1455,32 @@ async fn replay_attack_rejected_via_rpc() {
 
     // If first succeeded, wait for it to be processed before replay attempt
     if let Ok(mut progress) = first_result {
-        println!("Waiting for first transaction to be included in block...");
+        tracing::info!("Waiting for first transaction to be included in block...");
         while let Some(status) = progress.next().await {
             match status {
                 Ok(subxt::tx::TransactionStatus::InBestBlock(info)) => {
-                    println!("  First transaction in best block: {:?}", info.block_hash());
+                    tracing::info!("  First transaction in best block: {:?}", info.block_hash());
                     break;
                 }
                 Ok(subxt::tx::TransactionStatus::InFinalizedBlock(info)) => {
-                    println!("  First transaction finalized: {:?}", info.block_hash());
+                    tracing::info!("  First transaction finalized: {:?}", info.block_hash());
                     break;
                 }
                 Ok(subxt::tx::TransactionStatus::Error { message }) => {
-                    println!("  First transaction error: {}", message);
+                    tracing::info!("  First transaction error: {}", message);
                     break;
                 }
                 Ok(subxt::tx::TransactionStatus::Invalid { message }) => {
-                    println!("  First transaction invalid: {}", message);
+                    tracing::info!("  First transaction invalid: {}", message);
                     break;
                 }
                 Ok(subxt::tx::TransactionStatus::Dropped { message }) => {
-                    println!("  First transaction dropped: {}", message);
+                    tracing::info!("  First transaction dropped: {}", message);
                     break;
                 }
                 Ok(_) => continue,
                 Err(e) => {
-                    println!("  First transaction status error: {}", e);
+                    tracing::info!("  First transaction status error: {}", e);
                     break;
                 }
             }
@@ -1475,7 +1489,7 @@ async fn replay_attack_rejected_via_rpc() {
 
     // Second submission - MUST fail (either replay protection or ContractAlreadyDeployed)
     // Both are valid rejections that prevent the attack vector
-    println!("Submitting DEPLOY_TX (second attempt - should be rejected)...");
+    tracing::info!("Submitting DEPLOY_TX (second attempt - should be rejected)...");
     let second_result = client.submit_expecting_rejection(DEPLOY_TX.to_vec()).await;
 
     assert!(
@@ -1485,7 +1499,7 @@ async fn replay_attack_rejected_via_rpc() {
     );
 
     let error_msg = second_result.unwrap();
-    println!("✓ Replay transaction rejected with: {}", error_msg);
+    tracing::info!("✓ Replay transaction rejected with: {}", error_msg);
 
     // Verify the error indicates an invalid transaction
     // Accept various error types: replay protection, already deployed, or generic invalid
@@ -1498,14 +1512,14 @@ async fn replay_attack_rejected_via_rpc() {
         error_msg
     );
 
-    println!("✓ PR367-TC-0003-02 E2E PASSED: Replay attack rejected, no blockspace consumed");
+    tracing::info!("✓ PR367-TC-0003-02 E2E PASSED: Replay attack rejected, no blockspace consumed");
 }
 
 /// PR367-TC-0003-03 E2E: Valid Transaction Succeeds
 ///
 /// Confirms no regression - valid transactions should still be accepted.
 /// Note: This test requires a fresh node state where the contract hasn't been deployed.
-#[tokio::test]
+#[e2e_test]
 #[ignore = "Requires fresh node state - run manually with cargo test-e2e-local"]
 async fn valid_deploy_transaction_succeeds_via_rpc() {
     use midnight_node_res::undeployed::transactions::DEPLOY_TX;
@@ -1513,9 +1527,9 @@ async fn valid_deploy_transaction_succeeds_via_rpc() {
     let settings = Settings::default();
     let client = MidnightClient::new(settings.node_client).await;
 
-    println!("=== PR367-TC-0003-03 E2E: Valid Transaction Test ===");
+    tracing::info!("=== PR367-TC-0003-03 E2E: Valid Transaction Test ===");
     let _deploy_guard = wait_before_deploying().await;
-    println!("Submitting valid DEPLOY_TX...");
+    tracing::info!("Submitting valid DEPLOY_TX...");
 
     let result = client.submit_expecting_success(DEPLOY_TX.to_vec()).await;
 
@@ -1525,7 +1539,9 @@ async fn valid_deploy_transaction_succeeds_via_rpc() {
         result.err()
     );
 
-    println!("✓ PR367-TC-0003-03 E2E PASSED: Valid transaction accepted and included in block");
+    tracing::info!(
+        "✓ PR367-TC-0003-03 E2E PASSED: Valid transaction accepted and included in block"
+    );
 }
 
 // ============================================================================
@@ -1549,7 +1565,7 @@ fn assert_contract_not_present_error(err: &(dyn std::error::Error + 'static)) {
 /// Uses CONTRACT_ADDR (the address DEPLOY_TX deploys to) so we know the
 /// address itself parses; the only reason for failure is "no contract here".
 /// Pre-deploy gated so it runs before any DEPLOY_TX submission.
-#[tokio::test]
+#[e2e_test]
 async fn contract_state_for_undeployed_address_returns_not_present() {
     use midnight_node_res::undeployed::transactions::CONTRACT_ADDR;
 
@@ -1571,7 +1587,7 @@ async fn contract_state_for_undeployed_address_returns_not_present() {
 /// #1166: an unparseable (non-hex) address must be rejected at the RPC layer
 /// with BadContractAddress, distinct from ContractNotPresent. This protects
 /// the new error variant from being conflated with input-validation failures.
-#[tokio::test]
+#[e2e_test]
 async fn contract_state_rejects_unparseable_address() {
     let settings = Settings::default();
     let client = MidnightClient::new(settings.node_client).await;
@@ -1597,7 +1613,7 @@ async fn contract_state_rejects_unparseable_address() {
 ///
 /// Block 1 (the first block after genesis) is the pre-deploy reference —
 /// no user transaction can have been included yet.
-#[tokio::test]
+#[e2e_test]
 async fn contract_state_distinguishes_historical_and_current_blocks() {
     use midnight_node_ledger_helpers::extract_tx_with_context;
     use midnight_node_toolkit::commands::contract_address::{self, ContractAddressArgs};
@@ -1637,7 +1653,7 @@ async fn contract_state_distinguishes_historical_and_current_blocks() {
     let deploy_file = tempdir.path().join("contract_deploy.mn");
     let deploy_file_str = deploy_file.to_string_lossy().to_string();
 
-    println!("Generating fresh DEPLOY_TX against live chain at {url}...");
+    tracing::info!("Generating fresh DEPLOY_TX against live chain at {url}...");
     let gen_args = GenerateTxsArgs {
         builder: Builder::ContractSimple(ContractCall::Deploy(ContractDeployArgs {
             funding_seed: "0000000000000000000000000000000000000000000000000000000000000001"
@@ -1676,12 +1692,12 @@ async fn contract_state_distinguishes_historical_and_current_blocks() {
         untagged: false,
     })
     .expect("extract contract address from deploy tx");
-    println!("Contract address (dynamic): {addr}");
+    tracing::info!("Contract address (dynamic): {addr}");
 
     let deploy_bytes = std::fs::read(&deploy_file).expect("read generated deploy tx file");
     let (deploy_tx_bytes, _block_context) = extract_tx_with_context(&deploy_bytes);
 
-    println!("Submitting DEPLOY_TX...");
+    tracing::info!("Submitting DEPLOY_TX...");
     let mut progress = client
         .submit_midnight_tx(deploy_tx_bytes)
         .await
@@ -1691,11 +1707,11 @@ async fn contract_state_distinguishes_historical_and_current_blocks() {
         while let Some(status) = progress.next().await {
             match status {
                 Ok(subxt::tx::TransactionStatus::InBestBlock(info)) => {
-                    println!("  DEPLOY_TX in best block: {:?}", info.block_hash());
+                    tracing::info!("  DEPLOY_TX in best block: {:?}", info.block_hash());
                     return Ok::<_, String>(info.block_hash());
                 }
                 Ok(subxt::tx::TransactionStatus::InFinalizedBlock(info)) => {
-                    println!("  DEPLOY_TX finalized: {:?}", info.block_hash());
+                    tracing::info!("  DEPLOY_TX finalized: {:?}", info.block_hash());
                     return Ok(info.block_hash());
                 }
                 Ok(subxt::tx::TransactionStatus::Invalid { message })
@@ -1703,7 +1719,7 @@ async fn contract_state_distinguishes_historical_and_current_blocks() {
                 | Ok(subxt::tx::TransactionStatus::Error { message }) => {
                     return Err(format!("DEPLOY_TX terminated without inclusion: {message}"));
                 }
-                Ok(other) => println!("  status: {other:?}"),
+                Ok(other) => tracing::info!("  status: {other:?}"),
                 Err(e) => return Err(format!("progress error: {e}")),
             }
         }
@@ -1721,7 +1737,7 @@ async fn contract_state_distinguishes_historical_and_current_blocks() {
         !post_deploy_state.is_empty(),
         "deployed contract state should be non-empty"
     );
-    println!(
+    tracing::info!(
         "Contract present at post-deploy block {:?} ({} hex chars of state)",
         post_deploy_hash,
         post_deploy_state.len()
@@ -1734,26 +1750,27 @@ async fn contract_state_distinguishes_historical_and_current_blocks() {
     let err = pre_result.expect_err("expected ContractNotPresent at pre-deploy block 1, got Ok");
     assert_contract_not_present_error(err.as_ref());
 
-    println!(
+    tracing::info!(
         "✓ block 1 → ContractNotPresent; block {:?} → deployed state",
         post_deploy_hash
     );
 }
 
-#[tokio::test]
+#[e2e_test]
 async fn register_twice_with_same_cardano_address() {
     let settings = Settings::default();
     let cardano_client = CardanoClient::new(settings.ogmios_client, settings.constants).await;
     let midnight_client = MidnightClient::new(settings.node_client.clone()).await;
 
     let address_bech32 = cardano_client.address_as_bech32();
-    println!("New Cardano wallet created: {:?}", address_bech32);
+    tracing::info!("New Cardano wallet created: {:?}", address_bech32);
 
     let midnight_wallet_seed = MidnightClient::new_seed();
     let dust_hex = MidnightClient::new_dust_hex(midnight_wallet_seed.clone());
-    println!(
+    tracing::info!(
         "Registering Cardano wallet {} with DUST address {}",
-        address_bech32, dust_hex
+        address_bech32,
+        dust_hex
     );
 
     let faucet = global_faucet_manager().await;
@@ -1766,7 +1783,7 @@ async fn register_twice_with_same_cardano_address() {
         .expect("Failed to register tx")
         .transaction
         .id;
-    println!(
+    tracing::info!(
         "Registration transaction submitted with hash: {}",
         hex::encode(register_tx_id)
     );
@@ -1776,7 +1793,7 @@ async fn register_twice_with_same_cardano_address() {
         .find_utxo_by_tx_id(&validator_address, hex::encode(register_tx_id))
         .await
         .expect("No registration UTXO found after registering");
-    println!("Found registration UTXO: {:?}", register_tx);
+    tracing::info!("Found registration UTXO: {:?}", register_tx);
 
     let amount = 100;
     let tx_id = cardano_client
@@ -1785,7 +1802,7 @@ async fn register_twice_with_same_cardano_address() {
         .expect("Failed to mint tokens")
         .transaction
         .id;
-    println!("Minted {} cNIGHT. Tx: {}", amount, hex::encode(tx_id));
+    tracing::info!("Minted {} cNIGHT. Tx: {}", amount, hex::encode(tx_id));
 
     // FIXME: it returns first utxo, find by native token or return all utxos
     let cnight_utxo = match cardano_client
@@ -1799,16 +1816,16 @@ async fn register_twice_with_same_cardano_address() {
     let prefix = b"asset_create";
     let nonce =
         MidnightClient::calculate_nonce(prefix, cnight_utxo.transaction.id, cnight_utxo.index);
-    println!("Calculated nonce for cNIGHT UTXO: {}", nonce);
+    tracing::info!("Calculated nonce for cNIGHT UTXO: {}", nonce);
 
     let utxo_owner = midnight_client
         .poll_utxo_owners_until_change(nonce, None, 60, 1000)
         .await
         .expect("Failed to poll UTXO owners");
-    println!("Queried UTXO owners from Midnight node: {:?}", utxo_owner);
+    tracing::info!("Queried UTXO owners from Midnight node: {:?}", utxo_owner);
 
     let utxo_owner_hex = hex::encode(utxo_owner.unwrap().0.0);
-    println!("UTXO owner in hex: {:?}", utxo_owner_hex);
+    tracing::info!("UTXO owner in hex: {:?}", utxo_owner_hex);
     assert_eq!(
         utxo_owner_hex, dust_hex,
         "UTXO owner does not match DUST address"
@@ -1825,7 +1842,7 @@ async fn register_twice_with_same_cardano_address() {
         .expect("Failed to register tx")
         .transaction
         .id;
-    println!(
+    tracing::info!(
         "Registration transaction submitted with hash: {}",
         hex::encode(register_tx_id2)
     );
@@ -1834,7 +1851,7 @@ async fn register_twice_with_same_cardano_address() {
         .find_utxo_by_tx_id(&validator_address, hex::encode(register_tx_id2))
         .await
         .expect("No registration UTXO found after registering");
-    println!("Found registration UTXO: {:?}", register_tx2);
+    tracing::info!("Found registration UTXO: {:?}", register_tx2);
 
     let amount2 = 100;
     let tx_id2 = cardano_client
@@ -1843,7 +1860,7 @@ async fn register_twice_with_same_cardano_address() {
         .expect("Failed to mint tokens")
         .transaction
         .id;
-    println!("Minted {} cNIGHT. Tx: {}", amount2, hex::encode(tx_id2));
+    tracing::info!("Minted {} cNIGHT. Tx: {}", amount2, hex::encode(tx_id2));
 
     // FIXME: it returns first utxo, find by native token or return all utxos
     let cnight_utxo2 = match cardano_client
@@ -1857,7 +1874,7 @@ async fn register_twice_with_same_cardano_address() {
     let prefix2 = b"asset_create";
     let nonce2 =
         MidnightClient::calculate_nonce(prefix2, cnight_utxo2.transaction.id, cnight_utxo2.index);
-    println!("Calculated nonce for cNIGHT UTXO: {}", nonce2);
+    tracing::info!("Calculated nonce for cNIGHT UTXO: {}", nonce2);
 
     let args = DustBalanceArgs {
         source: Source {
@@ -1880,7 +1897,7 @@ async fn register_twice_with_same_cardano_address() {
         .expect("dust-balance error");
 
     if let DustBalanceResult::Json(DustBalanceJson { total, .. }) = &result {
-        println!("Total dust balance: {}", total);
+        tracing::info!("Total dust balance: {}", total);
     }
 
     assert!(matches!(result, DustBalanceResult::Json(DustBalanceJson{total, ..}) if total > 0));
@@ -1906,27 +1923,28 @@ async fn register_twice_with_same_cardano_address() {
         .expect("dust-balance error");
 
     if let DustBalanceResult::Json(DustBalanceJson { total, .. }) = &result2 {
-        println!("Total dust balance: {}", total);
+        tracing::info!("Total dust balance: {}", total);
     }
 
     assert!(matches!(result2, DustBalanceResult::Json(DustBalanceJson{total, ..}) if total == 0));
 }
 
-#[tokio::test]
+#[e2e_test]
 async fn deregister_with_valid_cnight_utxo() {
     let settings = Settings::default();
     let cardano_client = CardanoClient::new(settings.ogmios_client, settings.constants).await;
     let midnight_client = MidnightClient::new(settings.node_client.clone()).await;
 
     let address_bech32 = cardano_client.address_as_bech32();
-    println!("New Cardano wallet created: {:?}", address_bech32);
+    tracing::info!("New Cardano wallet created: {:?}", address_bech32);
 
     let midnight_wallet_seed = MidnightClient::new_seed();
     let dust_hex = MidnightClient::new_dust_hex(midnight_wallet_seed.clone());
     let dust_bytes: Vec<u8> = hex::decode(&dust_hex).unwrap().try_into().unwrap();
-    println!(
+    tracing::info!(
         "Registering Cardano wallet {} with DUST address {}",
-        address_bech32, dust_hex
+        address_bech32,
+        dust_hex
     );
 
     let faucet = global_faucet_manager().await;
@@ -1939,7 +1957,7 @@ async fn deregister_with_valid_cnight_utxo() {
         .expect("Failed to register")
         .transaction
         .id;
-    println!(
+    tracing::info!(
         "Registration transaction submitted with hash: {}",
         hex::encode(register_tx_id)
     );
@@ -1949,7 +1967,7 @@ async fn deregister_with_valid_cnight_utxo() {
         .find_utxo_by_tx_id(&validator_address, hex::encode(register_tx_id))
         .await
         .expect("No registration UTXO found after registering");
-    println!("Found registration UTXO: {:?}", register_tx);
+    tracing::info!("Found registration UTXO: {:?}", register_tx);
 
     let amount = 100;
     let tx_id = cardano_client
@@ -1958,7 +1976,7 @@ async fn deregister_with_valid_cnight_utxo() {
         .expect("Failed to mint tokens")
         .transaction
         .id;
-    println!("Minted {} cNIGHT. Tx: {}", amount, hex::encode(tx_id));
+    tracing::info!("Minted {} cNIGHT. Tx: {}", amount, hex::encode(tx_id));
 
     // FIXME: it returns first utxo, find by native token or return all utxos
     let cnight_utxo = match cardano_client
@@ -1972,16 +1990,16 @@ async fn deregister_with_valid_cnight_utxo() {
     let prefix = b"asset_create";
     let nonce =
         MidnightClient::calculate_nonce(prefix, cnight_utxo.transaction.id, cnight_utxo.index);
-    println!("Calculated nonce for cNIGHT UTXO: {}", nonce);
+    tracing::info!("Calculated nonce for cNIGHT UTXO: {}", nonce);
 
     let utxo_owner = midnight_client
         .poll_utxo_owners_until_change(nonce, None, 60, 1000)
         .await
         .expect("Failed to poll UTXO owners");
-    println!("Queried UTXO owners from Midnight node: {:?}", utxo_owner);
+    tracing::info!("Queried UTXO owners from Midnight node: {:?}", utxo_owner);
 
     let utxo_owner_hex = hex::encode(utxo_owner.unwrap().0.0);
-    println!("UTXO owner in hex: {:?}", utxo_owner_hex);
+    tracing::info!("UTXO owner in hex: {:?}", utxo_owner_hex);
     assert_eq!(
         utxo_owner_hex, dust_hex,
         "UTXO owner does not match DUST address"
@@ -2000,7 +2018,7 @@ async fn deregister_with_valid_cnight_utxo() {
         .expect("Failed to deregister")
         .transaction
         .id;
-    println!(
+    tracing::info!(
         "Deregistration transaction submitted with hash: {}",
         hex::encode(deregister_tx)
     );
@@ -2030,7 +2048,7 @@ async fn deregister_with_valid_cnight_utxo() {
         deregistration.is_some(),
         "Did not find deregistration event with expected reward_address and dust_address"
     );
-    println!(
+    tracing::info!(
         "Matching Deregistration event found: {:?}",
         deregistration.unwrap()
     );
@@ -2051,7 +2069,7 @@ async fn deregister_with_valid_cnight_utxo() {
         mapping_removed.is_some(),
         "Did not find MappingRemoved event with expected reward_address, dust_address, and utxo_id"
     );
-    println!(
+    tracing::info!(
         "Matching MappingRemoved event found: {:?}",
         mapping_removed.unwrap()
     );
@@ -2078,7 +2096,7 @@ async fn deregister_with_valid_cnight_utxo() {
 
     let mut balance: &u128 = &0;
     if let DustBalanceResult::Json(DustBalanceJson { total, .. }) = &result {
-        println!("Total dust balance: {}", total);
+        tracing::info!("Total dust balance: {}", total);
         balance = total;
     }
 
@@ -2105,7 +2123,7 @@ async fn deregister_with_valid_cnight_utxo() {
         .expect("dust-balance error");
 
     if let DustBalanceResult::Json(DustBalanceJson { total, .. }) = &result2 {
-        println!("Total dust balance: {}", total);
+        tracing::info!("Total dust balance: {}", total);
     }
 
     assert!(
@@ -2127,9 +2145,9 @@ async fn deregister_with_valid_cnight_utxo() {
 /// a governance transaction would need to update the D-parameter between blocks.
 /// However, this test does verify the historical query code path is exercised
 /// by querying at different block heights and validating error handling.
-#[tokio::test]
+#[e2e_test]
 async fn query_d_parameter_at_historical_block() {
-    println!("=== D-Parameter Historical Block Query E2E Test ===");
+    tracing::info!("=== D-Parameter Historical Block Query E2E Test ===");
 
     let settings = Settings::default();
     let midnight_client = MidnightClient::new(settings.node_client).await;
@@ -2139,7 +2157,7 @@ async fn query_d_parameter_at_historical_block() {
         .get_block_hash_at_height(0)
         .await
         .expect("Failed to get genesis block hash");
-    println!(
+    tracing::info!(
         "Genesis block hash: 0x{}",
         hex::encode(genesis_block_hash.as_bytes())
     );
@@ -2149,30 +2167,30 @@ async fn query_d_parameter_at_historical_block() {
         .get_best_block_hash()
         .await
         .expect("Failed to get best block hash");
-    println!(
+    tracing::info!(
         "Current block hash: 0x{}",
         hex::encode(current_block_hash.as_bytes())
     );
 
     // Step 3: Query D-Parameter at genesis block
-    println!("Querying D-param at genesis block...");
+    tracing::info!("Querying D-param at genesis block...");
     let d_param_at_genesis = midnight_client
         .get_d_parameter_at(genesis_block_hash)
         .await
         .expect("Failed to query D-param at genesis block");
-    println!(
+    tracing::info!(
         "D-param at genesis: ({}, {})",
         d_param_at_genesis.num_permissioned_candidates,
         d_param_at_genesis.num_registered_candidates
     );
 
     // Step 4: Query D-Parameter at current block
-    println!("Querying D-param at current block...");
+    tracing::info!("Querying D-param at current block...");
     let d_param_at_current = midnight_client
         .get_d_parameter_at(current_block_hash)
         .await
         .expect("Failed to query D-param at current block");
-    println!(
+    tracing::info!(
         "D-param at current: ({}, {})",
         d_param_at_current.num_permissioned_candidates,
         d_param_at_current.num_registered_candidates
@@ -2182,10 +2200,10 @@ async fn query_d_parameter_at_historical_block() {
     // Note: Values may be the same since D-parameter hasn't been changed via governance.
     // This test primarily verifies the historical query code path works, not that
     // different blocks have different values (which would require governance changes).
-    println!("✓ Historical block queries returned valid D-parameter data");
+    tracing::info!("✓ Historical block queries returned valid D-parameter data");
 
     // Step 6: Test error handling - query with invalid block hash
-    println!("Testing error handling with invalid block hash...");
+    tracing::info!("Testing error handling with invalid block hash...");
     let invalid_block_hash = subxt::utils::H256::from([0xff; 32]);
     let invalid_query_result = midnight_client.get_d_parameter_at(invalid_block_hash).await;
 
@@ -2194,13 +2212,13 @@ async fn query_d_parameter_at_historical_block() {
         "Query with invalid block hash should return an error, but got: {:?}",
         invalid_query_result
     );
-    println!(
+    tracing::info!(
         "✓ Invalid block hash correctly rejected: {}",
         invalid_query_result.unwrap_err()
     );
 
     // Step 7: Verify querying the same block hash is idempotent
-    println!("Verifying idempotent queries at same block hash...");
+    tracing::info!("Verifying idempotent queries at same block hash...");
     let d_param_at_genesis_again = midnight_client
         .get_d_parameter_at(genesis_block_hash)
         .await
@@ -2217,27 +2235,27 @@ async fn query_d_parameter_at_historical_block() {
         "D-param registered at same block hash should be consistent"
     );
 
-    println!("✓ Historical block query verification passed");
-    println!();
-    println!("Note: D-parameter values at genesis and current block are the same");
-    println!("because no governance transaction has updated the parameter.");
-    println!("To fully test historical value differences, use update_d_parameter");
-    println!("via federated authority governance between block queries.");
+    tracing::info!("✓ Historical block query verification passed");
+    tracing::info!("Note: D-parameter values at genesis and current block are the same");
+    tracing::info!("because no governance transaction has updated the parameter.");
+    tracing::info!("To fully test historical value differences, use update_d_parameter");
+    tracing::info!("via federated authority governance between block queries.");
 }
-#[tokio::test]
+#[e2e_test]
 async fn deregister_first_mapping() {
     let settings = Settings::default();
     let cardano_client = CardanoClient::new(settings.ogmios_client, settings.constants).await;
     let midnight_client = MidnightClient::new(settings.node_client.clone()).await;
 
     let address_bech32 = cardano_client.address_as_bech32();
-    println!("New Cardano wallet created: {:?}", address_bech32);
+    tracing::info!("New Cardano wallet created: {:?}", address_bech32);
 
     let midnight_wallet_seed = MidnightClient::new_seed();
     let dust_hex = MidnightClient::new_dust_hex(midnight_wallet_seed.clone());
-    println!(
+    tracing::info!(
         "Registering Cardano wallet {} with DUST address {}",
-        address_bech32, dust_hex
+        address_bech32,
+        dust_hex
     );
 
     let faucet = global_faucet_manager().await;
@@ -2250,7 +2268,7 @@ async fn deregister_first_mapping() {
         .expect("Failed to register tx")
         .transaction
         .id;
-    println!(
+    tracing::info!(
         "Registration transaction submitted with hash: {}",
         hex::encode(register_tx_id)
     );
@@ -2260,7 +2278,7 @@ async fn deregister_first_mapping() {
         .find_utxo_by_tx_id(&validator_address, hex::encode(register_tx_id))
         .await
         .expect("No registration UTXO found after registering");
-    println!("Found registration UTXO: {:?}", register_tx);
+    tracing::info!("Found registration UTXO: {:?}", register_tx);
 
     let amount = 100;
     let tx_id = cardano_client
@@ -2269,7 +2287,7 @@ async fn deregister_first_mapping() {
         .expect("Failed to mint tokens")
         .transaction
         .id;
-    println!("Minted {} cNIGHT. Tx: {}", amount, hex::encode(tx_id));
+    tracing::info!("Minted {} cNIGHT. Tx: {}", amount, hex::encode(tx_id));
 
     // FIXME: it returns first utxo, find by native token or return all utxos
     let cnight_utxo = match cardano_client
@@ -2283,16 +2301,16 @@ async fn deregister_first_mapping() {
     let prefix = b"asset_create";
     let nonce =
         MidnightClient::calculate_nonce(prefix, cnight_utxo.transaction.id, cnight_utxo.index);
-    println!("Calculated nonce for cNIGHT UTXO: {}", nonce);
+    tracing::info!("Calculated nonce for cNIGHT UTXO: {}", nonce);
 
     let utxo_owner = midnight_client
         .poll_utxo_owners_until_change(nonce, None, 60, 1000)
         .await
         .expect("Failed to poll UTXO owners");
-    println!("Queried UTXO owners from Midnight node: {:?}", utxo_owner);
+    tracing::info!("Queried UTXO owners from Midnight node: {:?}", utxo_owner);
 
     let utxo_owner_hex = hex::encode(utxo_owner.unwrap().0.0);
-    println!("UTXO owner in hex: {:?}", utxo_owner_hex);
+    tracing::info!("UTXO owner in hex: {:?}", utxo_owner_hex);
     assert_eq!(
         utxo_owner_hex, dust_hex,
         "UTXO owner does not match DUST address"
@@ -2320,7 +2338,7 @@ async fn deregister_first_mapping() {
         .expect("dust-balance error");
 
     if let DustBalanceResult::Json(DustBalanceJson { total, .. }) = &result {
-        println!("Total dust balance: {}", total);
+        tracing::info!("Total dust balance: {}", total);
     }
 
     assert!(matches!(result, DustBalanceResult::Json(DustBalanceJson{total, ..}) if total > 0));
@@ -2336,7 +2354,7 @@ async fn deregister_first_mapping() {
         .expect("Failed to register tx")
         .transaction
         .id;
-    println!(
+    tracing::info!(
         "Registration transaction submitted with hash: {}",
         hex::encode(register_tx_id2)
     );
@@ -2345,7 +2363,7 @@ async fn deregister_first_mapping() {
         .find_utxo_by_tx_id(&validator_address, hex::encode(register_tx_id2))
         .await
         .expect("No registration UTXO found after registering");
-    println!("Found registration UTXO: {:?}", register_tx2);
+    tracing::info!("Found registration UTXO: {:?}", register_tx2);
 
     let amount2 = 100;
     let tx_id2 = cardano_client
@@ -2354,7 +2372,7 @@ async fn deregister_first_mapping() {
         .expect("Failed to mint tokens")
         .transaction
         .id;
-    println!("Minted {} cNIGHT. Tx: {}", amount2, hex::encode(tx_id2));
+    tracing::info!("Minted {} cNIGHT. Tx: {}", amount2, hex::encode(tx_id2));
 
     // FIXME: it returns first utxo, find by native token or return all utxos
     let cnight_utxo2 = match cardano_client
@@ -2368,7 +2386,7 @@ async fn deregister_first_mapping() {
     let prefix2 = b"asset_create";
     let nonce2 =
         MidnightClient::calculate_nonce(prefix2, cnight_utxo2.transaction.id, cnight_utxo2.index);
-    println!("Calculated nonce for cNIGHT UTXO: {}", nonce2);
+    tracing::info!("Calculated nonce for cNIGHT UTXO: {}", nonce2);
 
     //check utxo2 NOT producing dust
     let args2 = DustBalanceArgs {
@@ -2392,7 +2410,7 @@ async fn deregister_first_mapping() {
         .expect("dust-balance error");
 
     if let DustBalanceResult::Json(DustBalanceJson { total, .. }) = &result2 {
-        println!("Total dust balance: {}", total);
+        tracing::info!("Total dust balance: {}", total);
     }
 
     assert!(matches!(result2, DustBalanceResult::Json(DustBalanceJson{total, ..}) if total == 0));
@@ -2411,7 +2429,7 @@ async fn deregister_first_mapping() {
         .expect("Failed to deregister")
         .transaction
         .id;
-    println!(
+    tracing::info!(
         "Deregistration transaction submitted with hash: {}",
         hex::encode(deregister_tx)
     );
@@ -2425,7 +2443,7 @@ async fn deregister_first_mapping() {
         .expect("Failed to mint tokens")
         .transaction
         .id;
-    println!("Minted {} cNIGHT. Tx: {}", amount3, hex::encode(tx_id3));
+    tracing::info!("Minted {} cNIGHT. Tx: {}", amount3, hex::encode(tx_id3));
 
     // FIXME: it returns first utxo, find by native token or return all utxos
     let cnight_utxo3 = match cardano_client
@@ -2439,7 +2457,7 @@ async fn deregister_first_mapping() {
     let prefix3 = b"asset_create";
     let nonce3 =
         MidnightClient::calculate_nonce(prefix3, cnight_utxo3.transaction.id, cnight_utxo3.index);
-    println!("Calculated nonce for cNIGHT UTXO: {}", nonce3);
+    tracing::info!("Calculated nonce for cNIGHT UTXO: {}", nonce3);
 
     //check utxo3 producing dust
     let args3 = DustBalanceArgs {
@@ -2464,7 +2482,7 @@ async fn deregister_first_mapping() {
 
     let mut balance: &u128 = &0;
     if let DustBalanceResult::Json(DustBalanceJson { total, .. }) = &result3 {
-        println!("Total dust balance: {}", total);
+        tracing::info!("Total dust balance: {}", total);
         balance = total;
     }
 
@@ -2491,7 +2509,7 @@ async fn deregister_first_mapping() {
         .expect("dust-balance error");
 
     if let DustBalanceResult::Json(DustBalanceJson { total, .. }) = &result4 {
-        println!("Total dust balance: {}", total);
+        tracing::info!("Total dust balance: {}", total);
     }
 
     assert!(
@@ -2499,13 +2517,13 @@ async fn deregister_first_mapping() {
     );
 }
 
-#[tokio::test]
+#[e2e_test]
 async fn produce_dust_from_tokens_owned_before_registration() {
     let settings = Settings::default();
     let cardano_client = CardanoClient::new(settings.ogmios_client, settings.constants).await;
     let midnight_client = MidnightClient::new(settings.node_client.clone()).await;
     let address_bech32 = cardano_client.address_as_bech32();
-    println!("New Cardano wallet created: {:?}", address_bech32);
+    tracing::info!("New Cardano wallet created: {:?}", address_bech32);
 
     let faucet = global_faucet_manager().await;
     let collateral_utxo = faucet.request_tokens(&address_bech32, 5_000_000).await;
@@ -2516,9 +2534,10 @@ async fn produce_dust_from_tokens_owned_before_registration() {
     let midnight_wallet_seed = MidnightClient::new_seed();
     let dust_hex = MidnightClient::new_dust_hex(midnight_wallet_seed.clone());
     let dust_bytes: Vec<u8> = hex::decode(&dust_hex).unwrap().try_into().unwrap();
-    println!(
+    tracing::info!(
         "Registering Cardano wallet {} with DUST address {}",
-        address_bech32, dust_hex
+        address_bech32,
+        dust_hex
     );
 
     let amount = 100;
@@ -2528,7 +2547,7 @@ async fn produce_dust_from_tokens_owned_before_registration() {
         .expect("Failed to mint tokens")
         .transaction
         .id;
-    println!("Minted {} cNIGHT. Tx: {}", amount, hex::encode(tx_id));
+    tracing::info!("Minted {} cNIGHT. Tx: {}", amount, hex::encode(tx_id));
 
     let cnight_utxo = match cardano_client
         .find_utxo_by_tx_id(&cardano_client.address_as_bech32(), hex::encode(tx_id))
@@ -2541,7 +2560,7 @@ async fn produce_dust_from_tokens_owned_before_registration() {
     let prefix = b"asset_create";
     let nonce =
         MidnightClient::calculate_nonce(prefix, cnight_utxo.transaction.id, cnight_utxo.index);
-    println!("Calculated nonce for cNIGHT UTXO: {}", nonce);
+    tracing::info!("Calculated nonce for cNIGHT UTXO: {}", nonce);
 
     let register_tx_id = cardano_client
         .register(&dust_hex, &tx_in, &collateral_utxo)
@@ -2549,7 +2568,7 @@ async fn produce_dust_from_tokens_owned_before_registration() {
         .expect("Failed to register tx")
         .transaction
         .id;
-    println!(
+    tracing::info!(
         "Registration transaction submitted with hash: {}",
         hex::encode(register_tx_id)
     );
@@ -2575,7 +2594,7 @@ async fn produce_dust_from_tokens_owned_before_registration() {
         .expect("dust-balance error");
 
     if let DustBalanceResult::Json(DustBalanceJson { total, .. }) = &result {
-        println!("Total dust balance: {}", total);
+        tracing::info!("Total dust balance: {}", total);
     }
 
     assert!(matches!(result, DustBalanceResult::Json(DustBalanceJson{total, ..}) if total == 0));
@@ -2584,7 +2603,7 @@ async fn produce_dust_from_tokens_owned_before_registration() {
         .rotate_cnight(&cnight_utxo)
         .await
         .expect("Failed to rotate cNight UTxO");
-    println!(
+    tracing::info!(
         "Rotated cNIGHT UTXO: {}",
         &hex::encode(&cnight_utxo_new.transaction.id)
     );
@@ -2603,16 +2622,16 @@ async fn produce_dust_from_tokens_owned_before_registration() {
     let prefix2 = b"asset_create";
     let nonce_new =
         MidnightClient::calculate_nonce(prefix2, cnight_new.transaction.id, cnight_new.index);
-    println!("Calculated nonce for cNIGHT UTXO: {}", nonce_new);
+    tracing::info!("Calculated nonce for cNIGHT UTXO: {}", nonce_new);
 
     let utxo_owner = midnight_client
         .poll_utxo_owners_until_change(nonce_new, None, 60, 1000)
         .await
         .expect("Failed to poll UTXO owners");
-    println!("Queried UTXO owners from Midnight node: {:?}", utxo_owner);
+    tracing::info!("Queried UTXO owners from Midnight node: {:?}", utxo_owner);
 
     let utxo_owner_hex = hex::encode(utxo_owner.unwrap().0.0);
-    println!("UTXO owner in hex: {:?}", utxo_owner_hex);
+    tracing::info!("UTXO owner in hex: {:?}", utxo_owner_hex);
     assert_eq!(
         utxo_owner_hex, dust_hex,
         "UTXO owner does not match DUST address"
@@ -2639,13 +2658,13 @@ async fn produce_dust_from_tokens_owned_before_registration() {
         .expect("dust-balance error");
 
     if let DustBalanceResult::Json(DustBalanceJson { total, .. }) = &result2 {
-        println!("Total dust balance: {}", total);
+        tracing::info!("Total dust balance: {}", total);
     }
 
     assert!(matches!(result2, DustBalanceResult::Json(DustBalanceJson{total, ..}) if total > 0));
 }
 
-#[tokio::test]
+#[e2e_test]
 async fn stop_dust_producing_after_deregistration_and_rotation() {
     // case for stop dust production (reg -> mint -> dereg -> rotate)
     let settings = Settings::default();
@@ -2654,7 +2673,7 @@ async fn stop_dust_producing_after_deregistration_and_rotation() {
     let base_url = settings.node_client.base_url.clone();
     let same_base_url = settings.node_client.base_url.clone();
     let midnight_client = MidnightClient::new(settings.node_client).await;
-    println!("New Cardano wallet created: {:?}", address_bech32);
+    tracing::info!("New Cardano wallet created: {:?}", address_bech32);
 
     let faucet = global_faucet_manager().await;
     let collateral_utxo = faucet.request_tokens(&address_bech32, 5_000_000).await;
@@ -2663,9 +2682,10 @@ async fn stop_dust_producing_after_deregistration_and_rotation() {
 
     let midnight_wallet_seed = MidnightClient::new_seed();
     let dust_hex = MidnightClient::new_dust_hex(midnight_wallet_seed.clone());
-    println!(
+    tracing::info!(
         "Registering Cardano wallet {} with DUST address {}",
-        address_bech32, dust_hex
+        address_bech32,
+        dust_hex
     );
 
     let register_tx_id = cardano_client
@@ -2674,7 +2694,7 @@ async fn stop_dust_producing_after_deregistration_and_rotation() {
         .expect("Failed to register tx")
         .transaction
         .id;
-    println!(
+    tracing::info!(
         "Registration transaction submitted with hash: {}",
         hex::encode(register_tx_id)
     );
@@ -2686,7 +2706,7 @@ async fn stop_dust_producing_after_deregistration_and_rotation() {
         .expect("Failed to mint tokens")
         .transaction
         .id;
-    println!("Minted {} cNIGHT. Tx: {}", amount, hex::encode(tx_id));
+    tracing::info!("Minted {} cNIGHT. Tx: {}", amount, hex::encode(tx_id));
 
     let cnight_utxo = match cardano_client
         .find_utxo_by_tx_id(&cardano_client.address_as_bech32(), hex::encode(tx_id))
@@ -2699,16 +2719,16 @@ async fn stop_dust_producing_after_deregistration_and_rotation() {
     let prefix = b"asset_create";
     let nonce =
         MidnightClient::calculate_nonce(prefix, cnight_utxo.transaction.id, cnight_utxo.index);
-    println!("Calculated nonce for cNIGHT UTXO: {}", nonce);
+    tracing::info!("Calculated nonce for cNIGHT UTXO: {}", nonce);
 
     let utxo_owner = midnight_client
         .poll_utxo_owners_until_change(nonce, None, 60, 1000)
         .await
         .expect("Failed to poll UTXO owners");
-    println!("Queried UTXO owners from Midnight node: {:?}", utxo_owner);
+    tracing::info!("Queried UTXO owners from Midnight node: {:?}", utxo_owner);
 
     let utxo_owner_hex = hex::encode(utxo_owner.unwrap().0.0);
-    println!("UTXO owner in hex: {:?}", utxo_owner_hex);
+    tracing::info!("UTXO owner in hex: {:?}", utxo_owner_hex);
     assert_eq!(
         utxo_owner_hex, dust_hex,
         "UTXO owner does not match DUST address"
@@ -2726,7 +2746,7 @@ async fn stop_dust_producing_after_deregistration_and_rotation() {
         .find_utxo_by_tx_id(&validator_address, hex::encode(register_tx_id))
         .await
         .expect("No registration UTXO found after registering");
-    println!("Found registration UTXO: {:?}", register_tx);
+    tracing::info!("Found registration UTXO: {:?}", register_tx);
 
     let deregister_tx = cardano_client
         .deregister(utxo, &register_tx, &collateral_utxo)
@@ -2734,7 +2754,7 @@ async fn stop_dust_producing_after_deregistration_and_rotation() {
         .expect("Failed to deregister")
         .transaction
         .id;
-    println!(
+    tracing::info!(
         "Deregistration transaction submitted with hash: {}",
         hex::encode(deregister_tx)
     );
@@ -2761,7 +2781,7 @@ async fn stop_dust_producing_after_deregistration_and_rotation() {
 
     let mut balance_before_rotation: &u128 = &0;
     if let DustBalanceResult::Json(DustBalanceJson { total, .. }) = &result2 {
-        println!("Total dust balance before rotation: {}", total);
+        tracing::info!("Total dust balance before rotation: {}", total);
         balance_before_rotation = total;
     }
 
@@ -2769,7 +2789,7 @@ async fn stop_dust_producing_after_deregistration_and_rotation() {
         .rotate_cnight(&cnight_utxo)
         .await
         .expect("Failed to rotate cNight UTxO");
-    println!(
+    tracing::info!(
         "Rotated cNIGHT UTXO: {}",
         &hex::encode(&cnight_utxo_new.transaction.id)
     );
@@ -2801,7 +2821,7 @@ async fn stop_dust_producing_after_deregistration_and_rotation() {
 
     let mut balance_after_rotation: &u128 = &0;
     if let DustBalanceResult::Json(DustBalanceJson { total, .. }) = &result {
-        println!("Total dust balance after rotation: {}", total);
+        tracing::info!("Total dust balance after rotation: {}", total);
         balance_after_rotation = total;
     }
 
@@ -2813,7 +2833,7 @@ async fn stop_dust_producing_after_deregistration_and_rotation() {
     );
 }
 
-#[tokio::test]
+#[e2e_test]
 async fn spend_cnight_producing_dust() {
     let settings = Settings::default();
     let cardano_client =
@@ -2821,17 +2841,18 @@ async fn spend_cnight_producing_dust() {
     let midnight_client = MidnightClient::new(settings.node_client.clone()).await;
 
     let bech32_address = cardano_client.address_as_bech32();
-    println!("New Cardano wallet created: {:?}", bech32_address);
+    tracing::info!("New Cardano wallet created: {:?}", bech32_address);
 
     let bob_client = CardanoClient::new(settings.ogmios_client, settings.constants).await;
     let bob_bech32 = bob_client.address_as_bech32();
-    println!("Bob's Cardano wallet created: {:?}", bob_bech32);
+    tracing::info!("Bob's Cardano wallet created: {:?}", bob_bech32);
 
     let midnight_wallet_seed = MidnightClient::new_seed();
     let dust_hex = MidnightClient::new_dust_hex(midnight_wallet_seed.clone());
-    println!(
+    tracing::info!(
         "Registering Cardano wallet {} with DUST address {}",
-        bech32_address, dust_hex
+        bech32_address,
+        dust_hex
     );
 
     let faucet = global_faucet_manager().await;
@@ -2844,7 +2865,7 @@ async fn spend_cnight_producing_dust() {
         .expect("Failed to register tx")
         .transaction
         .id;
-    println!(
+    tracing::info!(
         "Registration transaction submitted with hash: {}",
         hex::encode(register_tx_id)
     );
@@ -2867,7 +2888,7 @@ async fn spend_cnight_producing_dust() {
         .expect("Failed to mint tokens")
         .transaction
         .id;
-    println!("Minted {} cNIGHT. Tx: {}", amount, hex::encode(tx_id));
+    tracing::info!("Minted {} cNIGHT. Tx: {}", amount, hex::encode(tx_id));
 
     // FIXME: it returns first utxo, find by native token or return all utxos
     let cnight_utxo = match cardano_client
@@ -2881,16 +2902,16 @@ async fn spend_cnight_producing_dust() {
     let prefix = b"asset_create";
     let nonce =
         MidnightClient::calculate_nonce(prefix, cnight_utxo.transaction.id, cnight_utxo.index);
-    println!("Calculated nonce for cNIGHT UTXO: {}", nonce);
+    tracing::info!("Calculated nonce for cNIGHT UTXO: {}", nonce);
 
     let utxo_owner = midnight_client
         .poll_utxo_owners_until_change(nonce, None, 60, 1000)
         .await
         .expect("Failed to poll UTXO owners");
-    println!("Queried UTXO owners from Midnight node: {:?}", utxo_owner);
+    tracing::info!("Queried UTXO owners from Midnight node: {:?}", utxo_owner);
 
     let utxo_owner_hex = hex::encode(utxo_owner.unwrap().0.0);
-    println!("UTXO owner in hex: {:?}", utxo_owner_hex);
+    tracing::info!("UTXO owner in hex: {:?}", utxo_owner_hex);
     assert_eq!(
         utxo_owner_hex, dust_hex,
         "UTXO owner does not match DUST address"
@@ -2918,12 +2939,12 @@ async fn spend_cnight_producing_dust() {
 
     let mut balance: &u128 = &0;
     if let DustBalanceResult::Json(DustBalanceJson { total, .. }) = &result {
-        println!("Total dust balance: {}", total);
+        tracing::info!("Total dust balance: {}", total);
         balance = total;
     }
 
     // sleep 10s
-    println!("Sleeping 10 seconds before spending cNIGHT...");
+    tracing::info!("Sleeping 10 seconds before spending cNIGHT...");
     tokio::time::sleep(Duration::from_secs(10)).await;
     let cnight_spent_utxo = cardano_client.spend_cnight(&cnight_utxo, &bob_bech32).await;
 
@@ -2953,7 +2974,7 @@ async fn spend_cnight_producing_dust() {
         .expect("dust-balance error");
 
     if let DustBalanceResult::Json(DustBalanceJson { total, .. }) = &result2 {
-        println!("Total dust balance: {}", total);
+        tracing::info!("Total dust balance: {}", total);
     }
 
     assert!(
@@ -2970,9 +2991,9 @@ async fn spend_cnight_producing_dust() {
 /// - D-Parameter with permissioned and registered candidate counts
 /// - Block info metadata showing where D-Parameter was fetched from
 /// - Permissioned candidates list (may be None if not set on mainchain)
-#[tokio::test]
+#[e2e_test]
 async fn get_ariadne_parameters_returns_valid_structure() {
-    println!("=== TC-PC-001: Ariadne Parameters Structure Validation ===");
+    tracing::info!("=== TC-PC-001: Ariadne Parameters Structure Validation ===");
 
     let settings = Settings::default();
     let midnight_client = MidnightClient::new(settings.node_client).await;
@@ -2986,13 +3007,13 @@ async fn get_ariadne_parameters_returns_valid_structure() {
         .await
         .expect("Failed to get Ariadne parameters");
 
-    println!("Ariadne Parameters Response:");
-    println!(
+    tracing::info!("Ariadne Parameters Response:");
+    tracing::info!(
         "  D-Parameter: ({}, {})",
         ariadne_params.d_parameter.num_permissioned_candidates,
         ariadne_params.d_parameter.num_registered_candidates
     );
-    println!(
+    tracing::info!(
         "  Permissioned Candidates: {:?}",
         ariadne_params
             .permissioned_candidates
@@ -3002,16 +3023,16 @@ async fn get_ariadne_parameters_returns_valid_structure() {
 
     // Verify D-Parameter structure is valid (values can be 0)
     // The important thing is that the RPC call succeeded and returned valid types
-    println!("✓ Ariadne parameters structure is valid");
+    tracing::info!("✓ Ariadne parameters structure is valid");
 }
 
 /// TC-PC-003: Verify D-Parameter from pallet matches expected configuration.
 ///
 /// The D-Parameter is now sourced from pallet-system-parameters instead of Cardano.
 /// In local environment, it's configured as (4, 1) - 4 permissioned, 1 registered.
-#[tokio::test]
+#[e2e_test]
 async fn d_parameter_from_pallet_matches_config() {
-    println!("=== TC-PC-003: D-Parameter Pallet Integration ===");
+    tracing::info!("=== TC-PC-003: D-Parameter Pallet Integration ===");
 
     let settings = Settings::default();
     let midnight_client = MidnightClient::new(settings.node_client).await;
@@ -3022,9 +3043,10 @@ async fn d_parameter_from_pallet_matches_config() {
         .await
         .expect("Failed to get D-Parameter");
 
-    println!(
+    tracing::info!(
         "D-Parameter from pallet-system-parameters: ({}, {})",
-        d_param.num_permissioned_candidates, d_param.num_registered_candidates
+        d_param.num_permissioned_candidates,
+        d_param.num_registered_candidates
     );
 
     // Also query via getAriadneParameters to verify consistency
@@ -3034,7 +3056,7 @@ async fn d_parameter_from_pallet_matches_config() {
         .await
         .expect("Failed to get Ariadne parameters");
 
-    println!(
+    tracing::info!(
         "D-Parameter from getAriadneParameters: ({}, {})",
         ariadne_params.d_parameter.num_permissioned_candidates,
         ariadne_params.d_parameter.num_registered_candidates
@@ -3061,7 +3083,7 @@ async fn d_parameter_from_pallet_matches_config() {
         "Registered count should match system-parameters config (expected 0)"
     );
 
-    println!("✓ D-Parameter correctly sourced from pallet-system-parameters");
+    tracing::info!("✓ D-Parameter correctly sourced from pallet-system-parameters");
 }
 
 /// TC-PC-002: Verify permissioned candidates match Aiken format.
@@ -3069,9 +3091,9 @@ async fn d_parameter_from_pallet_matches_config() {
 /// In local environment, 3 permissioned candidates (Alice, Bob, Charlie)
 /// are inserted during setup. This test verifies they are returned in the
 /// Aiken contract format with the correct structure.
-#[tokio::test]
+#[e2e_test]
 async fn permissioned_candidates_aiken_format() {
-    println!("=== TC-PC-002: Aiken Permissioned Candidates Format Validation ===");
+    tracing::info!("=== TC-PC-002: Aiken Permissioned Candidates Format Validation ===");
 
     let settings = Settings::default();
     let midnight_client = MidnightClient::new(settings.node_client).await;
@@ -3086,7 +3108,7 @@ async fn permissioned_candidates_aiken_format() {
         .expect("Failed to get Ariadne parameters");
 
     if let Some(candidates) = &ariadne_params.permissioned_candidates {
-        println!("Found {} permissioned candidates", candidates.len());
+        tracing::info!("Found {} permissioned candidates", candidates.len());
 
         // Local environment inserts 3 permissioned candidates
         assert!(
@@ -3111,9 +3133,11 @@ async fn permissioned_candidates_aiken_format() {
                 .map(|obj| obj.contains_key("aura") && obj.contains_key("gran"))
                 .unwrap_or(false);
 
-            println!(
+            tracing::info!(
                 "  Candidate {}: sidechain={}, has_keys={}",
-                i, has_sidechain_key, has_keys
+                i,
+                has_sidechain_key,
+                has_keys
             );
 
             assert!(
@@ -3128,12 +3152,14 @@ async fn permissioned_candidates_aiken_format() {
             );
         }
 
-        println!(
+        tracing::info!(
             "✓ All permissioned candidates have Aiken format with sidechainPublicKey and keys object"
         );
     } else {
         // In some test environments, permissioned candidates might not be set
-        println!("⚠ No permissioned candidates returned (may be expected in some environments)");
+        tracing::info!(
+            "⚠ No permissioned candidates returned (may be expected in some environments)"
+        );
     }
 }
 
@@ -3147,9 +3173,9 @@ async fn permissioned_candidates_aiken_format() {
 ///
 /// This confirms that the Aiken-format permissioned candidates are correctly
 /// parsed and available via the systemParameters RPC.
-#[tokio::test]
+#[e2e_test]
 async fn authority_selection_uses_aiken_candidates() {
-    println!("=== TC-PC-004: Aiken Permissioned Candidates Validation ===");
+    tracing::info!("=== TC-PC-004: Aiken Permissioned Candidates Validation ===");
 
     let settings = Settings::default();
     let midnight_client = MidnightClient::new(settings.node_client).await;
@@ -3157,7 +3183,7 @@ async fn authority_selection_uses_aiken_candidates() {
     // Use epoch 4 to query data from epoch 2 (SDK applies 2-epoch offset).
     // Contracts are deployed in epoch 2, so querying epoch 4 returns data from epoch 2.
     let target_epoch = 4u64;
-    println!(
+    tracing::info!(
         "Using epoch {} for permissioned candidates validation (data_epoch = {})",
         target_epoch,
         target_epoch - 2
@@ -3180,7 +3206,7 @@ async fn authority_selection_uses_aiken_candidates() {
         .permissioned_candidates
         .expect("Expected permissioned candidates to be present");
 
-    println!(
+    tracing::info!(
         "Permissioned candidates from Aiken contracts: {}",
         candidates.len()
     );
@@ -3228,7 +3254,7 @@ async fn authority_selection_uses_aiken_candidates() {
             i
         );
 
-        println!(
+        tracing::info!(
             "  [{}] AURA: {}... GRANDPA: {}... Sidechain: {}...",
             i,
             &aura_str[..aura_str.len().min(16)],
@@ -3245,7 +3271,7 @@ async fn authority_selection_uses_aiken_candidates() {
         "All candidates should have valid key structure"
     );
 
-    println!(
+    tracing::info!(
         "\n✓ Validated {} Aiken permissioned candidates with complete key structure",
         valid_candidates
     );
