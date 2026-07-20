@@ -556,3 +556,95 @@ async fn counter_increment_e2e() {
 
 	helper.submit_tx(&increment_tx).await.expect("submit increment tx failed");
 }
+
+/// Welcome contract E2E ported from `midnight-contracts`: deploy, `add_participant`,
+/// `check_in` through the full compile -> prove -> submit -> verify pipeline. The
+/// constructor is simplified from the upstream `Vector<5000, Maybe<..>>` to a small
+/// fixed vector of plain strings (see `welcome.compact`).
+#[tokio::test]
+async fn welcome_e2e() {
+	let url = node_ws_url().await;
+	let helper = ToolkitTestHelper::new(url);
+
+	if !helper.prerequisites_ready() {
+		return;
+	}
+
+	// Arbitrary key; makes the deployer an organizer via the `local_sk` witness.
+	let organizer_sk = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff";
+	// `Opaque<"string">`; must be identical across add/check_in so membership matches.
+	let participant = "\"alice\"";
+
+	let coin_public = helper.show_address_coin_public(FUNDING_SEED);
+
+	let welcome_source = helper.load_contract_file("welcome/welcome.compact");
+	let compiled_dir = helper
+		.compile_contract(&welcome_source, "welcome")
+		.await
+		.expect("contract compilation failed");
+
+	let config_content = helper.load_template(
+		"welcome/config.template.ts",
+		&[("ORGANIZER_SK", organizer_sk), ("COIN_PUBLIC", &coin_public), ("NETWORK", "undeployed")],
+	);
+	let config_file = helper.write_config(&config_content, "welcome/contract.config.ts");
+
+	// Single-element seed vector for the `Vector<1, Opaque<"string">>` constructor.
+	let deploy = helper
+		.generate_intent_deploy_with_args(&config_file, &coin_public, &["[\"seed\"]"])
+		.await
+		.expect("generate deploy intent failed");
+	let deploy_tx = helper
+		.send_intent(&deploy.intent, &compiled_dir, FUNDING_SEED, None)
+		.await
+		.expect("send deploy intent failed");
+	helper.submit_tx(&deploy_tx).await.expect("submit deploy tx failed");
+	let welcome_addr =
+		helper.contract_address(&deploy_tx).expect("contract address extraction failed");
+
+	// Organizer adds an eligible participant.
+	let state_1 = helper.work_dir.path().join("welcome_state_1.mn");
+	helper
+		.contract_state(&welcome_addr, &state_1)
+		.await
+		.expect("contract state fetch failed");
+	let add = helper
+		.generate_intent_circuit(
+			&config_file,
+			&coin_public,
+			&state_1,
+			&deploy.private_state,
+			&welcome_addr,
+			CircuitCall { circuit_id: "add_participant", call_args: &[participant] },
+		)
+		.await
+		.expect("generate add_participant intent failed");
+	let add_tx = helper
+		.send_intent(&add.intent, &compiled_dir, FUNDING_SEED, Some(&add.zswap_state))
+		.await
+		.expect("send add_participant intent failed");
+	helper.submit_tx(&add_tx).await.expect("submit add_participant tx failed");
+
+	// Check in the just-added participant.
+	let state_2 = helper.work_dir.path().join("welcome_state_2.mn");
+	helper
+		.contract_state(&welcome_addr, &state_2)
+		.await
+		.expect("contract state fetch failed");
+	let check_in = helper
+		.generate_intent_circuit(
+			&config_file,
+			&coin_public,
+			&state_2,
+			&add.private_state,
+			&welcome_addr,
+			CircuitCall { circuit_id: "check_in", call_args: &[participant] },
+		)
+		.await
+		.expect("generate check_in intent failed");
+	let check_in_tx = helper
+		.send_intent(&check_in.intent, &compiled_dir, FUNDING_SEED, Some(&check_in.zswap_state))
+		.await
+		.expect("send check_in intent failed");
+	helper.submit_tx(&check_in_tx).await.expect("submit check_in tx failed");
+}
