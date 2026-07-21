@@ -648,3 +648,82 @@ async fn welcome_e2e() {
 		.expect("send check_in intent failed");
 	helper.submit_tx(&check_in_tx).await.expect("submit check_in tx failed");
 }
+
+/// Tic-tac-toe contract E2E ported from `midnight-contracts`: deploy a two-player game,
+/// play a full game to a Player X win, and assert the final state via verifier circuits.
+///
+/// `make_move` gates on `ownPublicKey().bytes == player_{x,o}_key`, so each move is
+/// submitted with that player's `--coin-public` (X is FUNDING_SEED, O is a distinct
+/// wallet); fees are always paid by FUNDING_SEED. All circuit args are primitives.
+#[tokio::test]
+async fn tic_tac_toe_e2e() {
+	let url = node_ws_url().await;
+	let helper = ToolkitTestHelper::new(url);
+
+	if !helper.prerequisites_ready() {
+		return;
+	}
+
+	// Player X is the funding wallet; player O is a distinct wallet (the constructor
+	// asserts the two keys differ).
+	const PLAYER_O_SEED: &str =
+		"0000000000000000000000000000000000000000000000000000000000000002";
+	let player_x = helper.show_address_coin_public(FUNDING_SEED);
+	let player_o = helper.show_address_coin_public(PLAYER_O_SEED);
+
+	let source = helper.load_contract_file("tic-tac-toe/tic_tac_toe.compact");
+	let compiled_dir =
+		helper.compile_contract(&source, "tic-tac-toe").await.expect("contract compilation failed");
+
+	let config_content = helper.load_template(
+		"tic-tac-toe/config.template.ts",
+		&[("COIN_PUBLIC", &player_x), ("NETWORK", "undeployed")],
+	);
+	let config_file = helper.write_config(&config_content, "tic-tac-toe/contract.config.ts");
+
+	let deploy = helper
+		.generate_intent_deploy_with_args(&config_file, &player_x, &[&player_x, &player_o])
+		.await
+		.expect("generate deploy intent failed");
+	let deploy_tx = helper
+		.send_intent(&deploy.intent, &compiled_dir, FUNDING_SEED, None)
+		.await
+		.expect("send deploy intent failed");
+	helper.submit_tx(&deploy_tx).await.expect("submit deploy tx failed");
+	let addr = helper.contract_address(&deploy_tx).expect("contract address extraction failed");
+
+	// X wins the middle row (3-4-5). Each entry is (circuit, args, is_player_o).
+	let calls: Vec<(&str, Vec<&str>, bool)> = vec![
+		("make_move", vec!["4"], false),               // X center
+		("make_move", vec!["0"], true),                // O top-left
+		("make_move", vec!["3"], false),               // X mid-left
+		("make_move", vec!["1"], true),                // O top-middle
+		("make_move", vec!["5"], false),               // X mid-right -> X wins
+		("verify_game_state", vec!["1", "1", "5"], false), // turn=X, status=x_wins, moves=5
+		("verify_winner", vec!["1"], false),           // winner=X
+	];
+
+	let mut prev_private = deploy.private_state.clone();
+	for (i, &(circuit, ref args, is_o)) in calls.iter().enumerate() {
+		let state = helper.work_dir.path().join(format!("ttt_state_{i}.mn"));
+		helper.contract_state(&addr, &state).await.expect("contract state fetch failed");
+		let coin_public: &str = if is_o { &player_o } else { &player_x };
+		let out = helper
+			.generate_intent_circuit(
+				&config_file,
+				coin_public,
+				&state,
+				&prev_private,
+				&addr,
+				CircuitCall { circuit_id: circuit, call_args: args.as_slice() },
+			)
+			.await
+			.unwrap_or_else(|e| panic!("generate {circuit} intent failed: {e}"));
+		let tx = helper
+			.send_intent(&out.intent, &compiled_dir, FUNDING_SEED, Some(&out.zswap_state))
+			.await
+			.unwrap_or_else(|e| panic!("send {circuit} intent failed: {e}"));
+		helper.submit_tx(&tx).await.unwrap_or_else(|e| panic!("submit {circuit} tx failed: {e}"));
+		prev_private = out.private_state;
+	}
+}
