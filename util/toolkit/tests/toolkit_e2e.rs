@@ -573,7 +573,7 @@ async fn welcome_e2e() {
 	// Arbitrary key; makes the deployer an organizer via the `local_sk` witness.
 	let organizer_sk = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff";
 	// `Opaque<"string">`; must be identical across add/check_in so membership matches.
-	let participant = "\"alice\"";
+	let participant = r#""alice""#;
 
 	let coin_public = helper.show_address_coin_public(FUNDING_SEED);
 
@@ -591,7 +591,7 @@ async fn welcome_e2e() {
 
 	// Single-element seed vector for the `Vector<1, Opaque<"string">>` constructor.
 	let deploy = helper
-		.generate_intent_deploy_with_args(&config_file, &coin_public, &["[\"seed\"]"])
+		.generate_intent_deploy_with_args(&config_file, &coin_public, &[r#"["seed"]"#])
 		.await
 		.expect("generate deploy intent failed");
 	let deploy_tx = helper
@@ -704,7 +704,7 @@ async fn tic_tac_toe_e2e() {
 	];
 
 	let mut prev_private = deploy.private_state.clone();
-	for (i, &(circuit, ref args, is_o)) in calls.iter().enumerate() {
+	for (i, (circuit, args, is_o)) in calls.into_iter().enumerate() {
 		let state = helper.work_dir.path().join(format!("ttt_state_{i}.mn"));
 		helper.contract_state(&addr, &state).await.expect("contract state fetch failed");
 		let coin_public: &str = if is_o { &player_o } else { &player_x };
